@@ -5,7 +5,7 @@ import pickle as pkl
 
 import numpy as np
 
-def read_embedding_file(file_name):
+def read_embedding_file(file_name, selected_words = None):
     word_index = []
     embeddings = []
 
@@ -16,7 +16,9 @@ def read_embedding_file(file_name):
                 print("Read {} lines".format(idx))
             line = line.strip().split()
             word = line[0].decode('utf-8')
-            embedding = np.array((map(float, line[1:])))
+            if selected_words is not None and word not in selected_words:
+                continue
+            embedding = np.array(list(map(float, line[1:])))
             word_index.append(word)
             embeddings.append(embedding)
 
