@@ -44,18 +44,28 @@ class WordSimilarityModel:
             raise ValueError("Word '{}' doesn't exist in the model".format(word))
         return self.embeddings[self.word_index[word]]
 
-    def most_similar(self, word, n=10, score=False):
-        u = self[word]
+    def most_similar_to_vector(self, vector, n=10, score=False):
         word_distances = []
         for other_word, idx in self.word_index.items():
             if word == other_word:
                 continue
-            word_distances.append((other_word, self.similarity(u, self[other_word])))
+            word_distances.append((other_word, self.similarity(vector, self[other_word])))
         word_distances.sort(key=lambda _: -_[1])
         if score:
             return word_distances[:n]
         else:
             return list(map(lambda _: _[0], word_distances))[:n]
+
+    def most_similar(self, word, n=10, score=False):
+        return self.most_similar_to_vector(self[word], n=n, score=score)
+
+    def get_word_index_matrix(self):
+        matrix = np.zeros((len(self.embeddings), len(self.embeddings[0])))
+        words = []
+        for word, index in self.word_index.items():
+            matrix[index] = self[word]
+            words.append(word)
+        return words, matrix
 
 def load_model(model_name):
     pkl_file = "./models/{}.pkl".format(model_name)
