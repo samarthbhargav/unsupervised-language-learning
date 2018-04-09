@@ -44,10 +44,10 @@ class WordSimilarityModel:
             raise ValueError("Word '{}' doesn't exist in the model".format(word))
         return self.embeddings[self.word_index[word]]
 
-    def most_similar_to_vector(self, vector, n=10, score=False):
+    def most_similar_to_vector(self, vector, n=10, score=False, word=None):
         word_distances = []
         for other_word, idx in self.word_index.items():
-            if word == other_word:
+            if word and word == other_word:
                 continue
             word_distances.append((other_word, self.similarity(vector, self[other_word])))
         word_distances.sort(key=lambda _: -_[1])
@@ -57,7 +57,7 @@ class WordSimilarityModel:
             return list(map(lambda _: _[0], word_distances))[:n]
 
     def most_similar(self, word, n=10, score=False):
-        return self.most_similar_to_vector(self[word], n=n, score=score)
+        return self.most_similar_to_vector(self[word], n=n, score=score, word=word)
 
     def get_word_index_matrix(self):
         matrix = np.zeros((len(self.embeddings), len(self.embeddings[0])))
