@@ -73,7 +73,7 @@ if __name__ == '__main__':
                 positive_matrix.append(vocab.one_hot(word))
 
             # TODO sample negative words
-            
+
 
 
 
