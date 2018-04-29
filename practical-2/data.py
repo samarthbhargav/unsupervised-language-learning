@@ -1,6 +1,7 @@
 import codecs
 import os
 import collections
+import torch
 
 import numpy as np
 
@@ -22,13 +23,22 @@ class SentenceIterator:
 def get_context_words(sentence, index, context_window):
     n_ = context_window // 2
     context = set()
+
     for i in range(index - n_, index + n_ + 1):
-        print(i)
+        # print(i)
         if i == index or i < 0 or i >= len(sentence):
             continue
         context.add(sentence[i])
     return context
 
+def get_positive_context(each_sentence, ids, context_size):
+    context = set()
+    for i in range(ids - context_size, ids + context_size + 1):
+#         print(i)
+        if i == ids or i < 0 or i >= len(each_sentence):
+            continue
+        context.add(each_sentence[i])
+    return context
 
 
 class Vocabulary:
@@ -61,10 +71,9 @@ class Vocabulary:
             if strict:
                 raise ValueError(" '{}' not present in the vocabulary".format(item)) ;
             word = "$UNK$"
-        vector = np.zeros(self.N)
+        vector = torch.zeros(self.N)
         vector[self.index[word]] = 1
         return vector
-
 
 
     def __getitem__(self, item):
