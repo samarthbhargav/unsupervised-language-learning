@@ -6,10 +6,11 @@ import numpy as np
 
 class SentenceIterator:
 
-    def __init__(self, file_name, min_length = 0, max_length = 50):
+    def __init__(self, file_name, min_length = 0, max_length = 50, stop_words = None):
         self.file_name = file_name
         self.min_length = min_length
         self.max_length = max_length
+        self.stop_words = stop_words
 
     def __iter__(self):
         with codecs.open(self.file_name, "r", "utf-8") as reader:
@@ -17,13 +18,15 @@ class SentenceIterator:
                 line = line.split()
                 if len(line) < self.min_length or len(line) > self.max_length:
                     continue
+                # remove stop_words
+                if self.stop_words:
+                    line = [word for word in line if word not in self.stop_words]
                 yield line
 
 def get_context_words(sentence, index, context_window):
     n_ = context_window // 2
     context = set()
     for i in range(index - n_, index + n_ + 1):
-        print(i)
         if i == index or i < 0 or i >= len(sentence):
             continue
         context.add(sentence[i])
@@ -54,6 +57,9 @@ class Vocabulary:
             assert special_token not in self.index
             self.index[special_token] = len(self.index)
 
+
+        self.inverse_index = dict([(v, k) for (k, v) in self.index.items()])
+
         self.N = len(self.index)
 
     def one_hot(self, word, strict = False):
@@ -65,7 +71,8 @@ class Vocabulary:
         vector[self.index[word]] = 1
         return vector
 
-
+    def word(self, index):
+        return self.inverse_index[index]
 
     def __getitem__(self, item):
         if item not in self.index:
