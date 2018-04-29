@@ -43,11 +43,13 @@ class Vocabulary:
         self.index  = {}
 
         counts = collections.defaultdict(int)
+        sentence_count = 0
         for sentence in sentences:
+            sentence_count += 1
             for word in sentence:
                 counts[word] += 1
 
-        print("Found a total of {} unique words in the data. Picking the top {}".format(len(counts), max_size))
+        print("Number of sentences: {}. Found a total of {} unique words in the data. Picking the top {}".format(sentence_count, len(counts), max_size))
         counts = list(counts.items())
         counts.sort(key=lambda _: -_[1])
         most_freq = [w[0] for w in counts[: max_size - len(special_tokens)]]

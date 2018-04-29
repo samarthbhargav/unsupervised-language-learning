@@ -8,6 +8,8 @@
 # KL should be a positive scalar (check with an assert here)
 
 ## The Embed-Align model
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -36,6 +38,8 @@ class BayesianSkipGramModel(nn.Module):
 
         # glorot-initialization
         inference_embedding = nn.init.xavier_uniform_(torch.zeros(self.embedding_dim, self.vocab.N))
+        if cuda:
+            inference_embedding = inference_embedding.cuda()
         self.inference_embedding = nn.Parameter(inference_embedding, requires_grad = True)
 
         self.inference_mean_transform = nn.Linear(2*self.embedding_dim, self.z_embedding_dim, bias = True)
@@ -43,22 +47,27 @@ class BayesianSkipGramModel(nn.Module):
         self.inference_transform = nn.Linear(self.z_embedding_dim, vocab.N, bias = True)
 
         prior_mean = nn.init.xavier_uniform_(torch.zeros(self.z_embedding_dim, self.vocab.N))
+        if cuda:
+            prior_mean = prior_mean.cuda()
         self.prior_mean = nn.Parameter(prior_mean, requires_grad = True)
 
         prior_sigma = nn.init.xavier_uniform_(torch.zeros(self.z_embedding_dim, self.vocab.N))
+        if cuda:
+            prior_sigma = prior_sigma.cuda()
         self.prior_sigma = nn.Parameter(prior_sigma)
 
-        self.standard_normal = distb.MultivariateNormal(torch.zeros(self.z_embedding_dim), torch.diag(torch.ones(self.z_embedding_dim)))
+        std_mean = torch.zeros(self.z_embedding_dim)
+        std_cov = torch.diag(torch.ones(self.z_embedding_dim))
+        if cuda:
+            std_mean = std_mean.cuda()
+            std_cov = std_cov.cuda()
+        self.standard_normal = distb.MultivariateNormal(std_mean, std_cov)
 
 
         if cuda:
-            self.inference_embedding = self.inference_embedding.cuda()
             self.inference_mean_transform = self.inference_mean_transform.cuda()
             self.inference_sigma_transform = self.inference_sigma_transform.cuda()
             self.inference_transform = self.inference_transform.cuda()
-
-            self.prior_mean = self.prior_mean.cuda()
-            self.prior_sigma = self.prior_sigma.cuda()
 
 
     def forward(self, center_word, context_words):
@@ -72,7 +81,7 @@ class BayesianSkipGramModel(nn.Module):
         # d_z <- embedding size of the latent variable z
         # from the (2d, 1) vector, predict the mean and sigma using 2 (different) feed forward affine layer (paper mentions log sigma squared, but use sigma here)
 
-        if cuda:
+        if self.cuda:
             center_word = center_word.cuda()
             context_words = context_words.cuda()
 
@@ -108,18 +117,25 @@ class BayesianSkipGramModel(nn.Module):
         prior_mean = torch.matmul(self.prior_mean, center_word)
         prior_sigma = F.softplus(torch.matmul(self.prior_sigma, center_word))
 
+        # clamp p values so loss doesn't explode
+        f_theta.clamp(min=1e-8)
+
         return f_theta, z_mean, z_sigma, prior_mean, prior_sigma
 
-def compute_loss(f_theta, z_mean, z_sigma, prior_mean, prior_sigma, context_idx):
+def compute_loss(f_theta, z_mean, z_sigma, prior_mean, prior_sigma, context_idx, cuda):
     prior = distb.MultivariateNormal(prior_mean, torch.diag(prior_sigma))
     posterior = distb.MultivariateNormal(z_mean, torch.diag(z_sigma))
 
-    log_pos = torch.empty(1)
+    log_pos = torch.zeros(1)
+    if use_cuda:
+        log_pos = log_pos.cuda()
+
     for idx in context_idx:
         log_pos += torch.log(f_theta[idx])
 
     kl_term = distb.kl_divergence(posterior, prior).sum()
     loss = kl_term - log_pos
+
     return loss
 
 if __name__ == '__main__':
@@ -130,27 +146,35 @@ if __name__ == '__main__':
     vocab_size = 1000
     context_window = 5
     negative_words = 10
-    n_epochs = 1
+    n_epochs = 10
     random_state = 42
-    data_path = "data/europarl/training.en"
+    data_path = "data/wa/test.en"
+    model_name = "test"
     use_cuda = True
     #################
+
+
     sentences = SentenceIterator(data_path)
     vocab = Vocabulary(sentences, max_size = vocab_size)
 
     bsm = BayesianSkipGramModel(vocab, embedding_dim, z_embedding_dim, random_state=random_state, cuda=use_cuda)
 
-    optimizer = optim.Adam(bsm.parameters())
+    # set up model parameters to learn
+    model_params = [bsm.inference_embedding, bsm.prior_mean, bsm.prior_sigma]
+    model_params.extend(bsm.inference_mean_transform.parameters())
+    model_params.extend(bsm.inference_sigma_transform.parameters())
+    model_params.extend(bsm.inference_transform.parameters())
+    optimizer = optim.Adam(model_params)
 
-    loss = []
+    epoch_losses = []
     tictoc = utils.TicToc()
     for epoch in range(1, n_epochs + 1):
         print("Running epoch: ", epoch)
         epoch_loss = []
         for sentence_num, sentence in enumerate(sentences):
             if sentence_num % 100 == 0:
-                print("Sentence: ", sentence_num)
-                tictoc.tic()
+                tictoc.tic("Sentence: {}".format(sentence_num))
+
             for center_idx, center_word in enumerate(sentence):
                 if center_word not in vocab.index:
                     continue
@@ -167,12 +191,25 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 f_theta, z_mean, z_sigma , prior_mean, prior_sigma = bsm(torch.FloatTensor(center_vec), torch.FloatTensor(context_words))
                 val, idx = f_theta.max(0)
-                val = idx.data.numpy()
+
+                loss = compute_loss(f_theta, z_mean, z_sigma, prior_mean, prior_sigma, context_idx, use_cuda)
+                if use_cuda:
+                    val = idx.cpu().data.numpy()
+                    epoch_loss.append(loss.cpu().data.numpy()[0])
+                else:
+                    val = idx.data.numpy()
+                    epoch_loss.append(loss.data.numpy()[0])
                 if epoch % 5 == 0:
                     print(center_word, vocab.word(int(val)))
-                loss = compute_loss(f_theta, z_mean, z_sigma, prior_mean, prior_sigma, context_idx)
-                epoch_loss.append(loss.data.numpy()[0])
+
                 loss.backward()
                 optimizer.step()
 
-        print(np.mean(epoch_loss))
+        epoch_losses.append(np.mean(epoch_loss))
+        tictoc.tic("Epoch complete: Mean loss: {}".format(np.mean(epoch_loss)))
+
+
+    model_save_path = os.path.join("./models/", model_name)
+    print("Saving model: ", model_save_path)
+    torch.save(bsm.state_dict(), model_save_path)
+    utils.save_object(epoch_losses, os.path.join("./models/", model_name) + "_loss")
