@@ -4,6 +4,10 @@ import collections
 
 import numpy as np
 
+def read_stop_words(file_name):
+    with codecs.open(file_name, "r", "utf-8") as reader:
+        return [line.strip() for line in reader]
+
 class SentenceIterator:
 
     def __init__(self, file_name, min_length = 0, max_length = 50, stop_words = None):
@@ -20,7 +24,7 @@ class SentenceIterator:
                     continue
                 # remove stop_words
                 if self.stop_words:
-                    line = [word for word in line if word not in self.stop_words]
+                    line = [word for word in line if word.lower() not in self.stop_words]
                 yield line
 
 def get_context_words(sentence, index, context_window):
