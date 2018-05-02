@@ -1,4 +1,3 @@
-
 # encoder -> word in context
 # L, S -> word without context (prior)
 
@@ -7,7 +6,6 @@
 # product of KL of  gaussians elementwise
 # KL should be a positive scalar (check with an assert here)
 
-## The Embed-Align model
 import os
 
 import torch
@@ -19,7 +17,7 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from data import SentenceIterator, Vocabulary, get_context_words
+from data import SentenceIterator, Vocabulary, get_context_words, read_stop_words
 import utils
 
 class BayesianSkipGramModel(nn.Module):
@@ -85,6 +83,7 @@ class BayesianSkipGramModel(nn.Module):
             center_word = center_word.cuda()
             context_words = context_words.cuda()
 
+        # confirm with Wilker this is right? concat + relu?
         center_word_embedding = torch.matmul(center_word, self.inference_embedding.t())
         context_words = torch.matmul(context_words, self.inference_embedding.t())
         concated_embeddings = torch.cat((center_word_embedding.repeat(context_words.size(0), 1), context_words), 1)
@@ -93,6 +92,7 @@ class BayesianSkipGramModel(nn.Module):
 
         z_mean = self.inference_mean_transform(summed_embeddings)
         z_sigma = F.softplus(self.inference_sigma_transform(summed_embeddings))
+        z_sigma = z_sigma ** 2
 
         z = z_mean + torch.mul(self.standard_normal.sample(), z_sigma)
 
@@ -113,9 +113,9 @@ class BayesianSkipGramModel(nn.Module):
         # z = \mu_{encoder} + noise (*) \sigma_{encoder}
         # use this z to the decoder
         # sum for every context word, compute the log probability
-
         prior_mean = torch.matmul(self.prior_mean, center_word)
         prior_sigma = F.softplus(torch.matmul(self.prior_sigma, center_word))
+        prior_sigma = prior_sigma ** 2
 
         # clamp p values so loss doesn't explode
         f_theta.clamp(min=1e-8)
@@ -149,12 +149,17 @@ if __name__ == '__main__':
     n_epochs = 10
     random_state = 42
     data_path = "data/wa/test.en"
+    stop_words_file = "data/en_stopwords.txt"
     model_name = "test"
     use_cuda = True
     #################
 
+    stop_words = None
+    if stop_words_file:
+        stop_words = read_stop_words(stop_words_file)
 
-    sentences = SentenceIterator(data_path)
+
+    sentences = SentenceIterator(data_path, stop_words=stop_words)
     vocab = Vocabulary(sentences, max_size = vocab_size)
 
     bsm = BayesianSkipGramModel(vocab, embedding_dim, z_embedding_dim, random_state=random_state, cuda=use_cuda)
