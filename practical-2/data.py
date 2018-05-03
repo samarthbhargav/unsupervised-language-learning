@@ -1,6 +1,8 @@
-import codecs
 import os
+import codecs
+import random
 import collections
+import math
 
 import numpy as np
 
@@ -22,9 +24,10 @@ class SentenceIterator:
                 line = line.split()
                 if len(line) < self.min_length or len(line) > self.max_length:
                     continue
+                line = [word.lower() for word in line]
                 # remove stop_words
                 if self.stop_words:
-                    line = [word for word in line if word.lower() not in self.stop_words]
+                    line = [word for word in line if word not in self.stop_words]
                 yield line
 
 def get_context_words(sentence, index, context_window):
@@ -46,15 +49,19 @@ class Vocabulary:
             special_tokens = {"$UNK$", "$EOS$", "$SOS$", "$PAD"}
         self.index  = {}
 
-        counts = collections.defaultdict(int)
+        self.ust = UnigramSamplingTable()
+
         sentence_count = 0
         for sentence in sentences:
             sentence_count += 1
             for word in sentence:
-                counts[word] += 1
+                self.ust.add(word)
 
-        print("Number of sentences: {}. Found a total of {} unique words in the data. Picking the top {}".format(sentence_count, len(counts), max_size))
-        counts = list(counts.items())
+        self.ust.prepare()
+        self.sentence_count = sentence_count
+        print("Number of sentences: {}. Tokens: {}. Found a total of {} unique words in the data. Picking the top {}".format(sentence_count,
+         self.ust.num_tokens,  len(self.ust.freq), max_size))
+        counts = list(self.ust.freq.items())
         counts.sort(key=lambda _: -_[1])
         most_freq = [w[0] for w in counts[: max_size - len(special_tokens)]]
 
@@ -62,7 +69,6 @@ class Vocabulary:
         for special_token in special_tokens:
             assert special_token not in self.index
             self.index[special_token] = len(self.index)
-
 
         self.inverse_index = dict([(v, k) for (k, v) in self.index.items()])
 
@@ -85,6 +91,36 @@ class Vocabulary:
             raise ValueError(" '{}' not present in the vocabulary".format(item))
         return self.index[item]
 
+class UnigramSamplingTable:
+    # implementation follows http://mccormickml.com/2017/01/11/word2vec-tutorial-part-2-negative-sampling/
+
+    def __init__(self):
+        self.table = {}
+        self.freq = collections.defaultdict(int)
+        self.__n = 0
+
+    def add(self, word):
+        # not threadsafe!
+        self.table[self.__n] = word
+        self.freq[word] += 1
+        self.__n += 1
+
+    def sample(self):
+        return self.table[random.randint(0, self.__n - 1)]
+
+    def prepare(self):
+        #print("Tokens: {}, Table: {}".format(self.__n, len(self.table)))
+        self.num_tokens =  sum(self.freq.values())
+
+    def remove_word(self, word, sample=0.001):
+        z_wi = self.freq[word]/self.num_tokens
+        prob = ((math.sqrt(z_wi / sample) + 1)) * ((sample)/z_wi)
+        return prob < random.random()
+
 if __name__ == '__main__':
     sentences = SentenceIterator("data/hansards/training.en")
     v = Vocabulary(sentences)
+    remove = [v.ust.remove_word("the") for _ in range(100)]
+    print(remove)
+    neg = v.ust.sample()
+    print(neg)
