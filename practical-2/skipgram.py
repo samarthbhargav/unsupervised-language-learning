@@ -40,12 +40,12 @@ class SkipGramModel(nn.Module):
         # TODO add noise
         self.input_embeddings = torch.zeros(self.embedding_dim, vocab.N)
         self.input_embeddings += torch.rand(self.input_embeddings.size())
-        self.input_embeddings = Variable(self.input_embeddings, requires_grad=True)
+        self.input_embeddings = nn.Parameter(self.input_embeddings)
 
         self.output_embeddings = torch.zeros(vocab.N, self.embedding_dim)
         self.output_embeddings += torch.rand(self.output_embeddings.size())
 
-        self.output_embeddings = Variable(self.output_embeddings, requires_grad=True)
+        self.output_embeddings = nn.Parameter(self.output_embeddings)
 
     def forward(self, center_word, positive_words, negative_words):
         input_embedding = torch.matmul(center_word, self.input_embeddings.t()).view(1, -1)
@@ -76,24 +76,27 @@ class SkipGramModel(nn.Module):
         utils.save_object(loss, os.path.join(path, model_name + "_loss"))
         utils.save_object(params, os.path.join(path, model_name + "_params"))
 
-def one_hot_negative(index_list, vocab):
-    neg = np.zeros((len(index_list), vocab.N))
-    for row, idx in enumerate(index_list):
-        neg[row] = vocab.one_hot(vocab.word(idx))
-    return neg
-
+def get_negative_matrix(vocab, n_negative):
+    neg = []
+    while len(neg) < n_negative:
+        neg_word = vocab.ust.sample()
+        if neg_word not in vocab.index:
+            continue
+        neg.append(vocab.one_hot(neg_word))
+    return np.array(neg)
 
 if __name__ == '__main__':
 
     ##### PARAMS ####
     params = {
         "embedding_dim" : 10,
-        "vocab_size": 1000,
+        "vocab_size": 10000,
         "context_window": 2,
-        "negative_words": 15,
+        "n_negative": 5,
         "model_name": "test",
-        "stop_words_file": "data/en_stopwords.txt",
-        "n_epochs": 1
+        "stop_words_file": None, # use sub-sampling instead
+        "n_epochs": 10,
+        "data_path": "data/hansards/training.en"
     }
     #################
 
@@ -105,7 +108,7 @@ if __name__ == '__main__':
     if stop_words_file:
         stop_words = read_stop_words(stop_words_file)
 
-    sentences = SentenceIterator("data/wa/test.en", stop_words=stop_words)
+    sentences = SentenceIterator(data_path, stop_words=stop_words)
     vocab = Vocabulary(sentences, max_size = vocab_size)
 
     sgm = SkipGramModel(vocab, embedding_dim)
@@ -119,7 +122,7 @@ if __name__ == '__main__':
         epoch_loss = []
         for sentence_num, each_sentence in enumerate(sentences):
             if sentence_num % 100 == 0:
-                tictoc.tic("Sentence: {}".format(sentence_num))
+                tictoc.tic("Sentence: {} of {}".format(sentence_num + 1, vocab.sentence_count))
 
             for center_idx, center_word in enumerate(each_sentence):
                 if center_word not in vocab.index:
@@ -128,16 +131,17 @@ if __name__ == '__main__':
                 center_word_vector = vocab.one_hot(center_word)
 
                 context_window_list = get_context_words(each_sentence, center_idx, context_window)
-                if len(context_window_list) == 0:
-                    continue
 
                 positive_matrix = []
                 for word in context_window_list:
+                    if vocab.ust.remove_word(word):
+                        continue
                     positive_matrix.append(vocab.one_hot(word))
 
-                # TODO change this to sample from words which don't co-occur with target word
-                negative_samples = np.random.randint(0, vocab.N , negative_words)
-                negative_matrix = one_hot_negative(negative_samples, vocab)
+                if len(positive_matrix) == 0:
+                    continue
+
+                negative_matrix = get_negative_matrix(vocab, n_negative)
 
                 optimizer.zero_grad()
                 loss = sgm.forward(torch.FloatTensor(center_word_vector), torch.FloatTensor(positive_matrix), torch.FloatTensor(negative_matrix))
