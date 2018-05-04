@@ -86,6 +86,14 @@ class Vocabulary:
     def word(self, index):
         return self.inverse_index[index]
 
+    def process(self, sentence):
+        output = []
+        for word in sentence:
+            if word not in self.index:
+                word = "$UNK$"
+            output.append(word)
+        return output
+
     def __getitem__(self, item):
         if item not in self.index:
             raise ValueError(" '{}' not present in the vocabulary".format(item))
@@ -114,6 +122,8 @@ class UnigramSamplingTable:
 
     def remove_word(self, word, sample=0.001):
         z_wi = self.freq[word]/self.num_tokens
+        if z_wi == 0:
+            return False
         prob = ((math.sqrt(z_wi / sample) + 1)) * ((sample)/z_wi)
         return prob < random.random()
 

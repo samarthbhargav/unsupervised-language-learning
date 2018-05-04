@@ -9,14 +9,11 @@ if __name__ == '__main__':
     model_root = "./models"
     filename = "./data/lst/lst_test.preprocessed"
     model, loss, params = SkipGramModel.load(model_root, model_name)
+    ematrix, words = model.get_embeddings()
+
     vocab = model.vocab
 
-    words = list(vocab.index.items())
-    words.sort(key= lambda _: _[1])
-
-    words = [ w for (w, i) in words ]
-    # print(words)
-    wsm = WordSimilarityModel(words, model.input_embeddings.detach().numpy().T)
+    wsm = WordSimilarityModel(words, ematrix)
     lst = LstIterator(filename)
     skipped_count = 0
     existing_words = {}
