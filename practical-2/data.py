@@ -86,6 +86,14 @@ class Vocabulary:
     def word(self, index):
         return self.inverse_index[index]
 
+    def process(self, sentence):
+        output = []
+        for word in sentence:
+            if word not in self.index:
+                word = "$UNK$"
+            output.append(word)
+        return output
+
     def __getitem__(self, item):
         if item not in self.index:
             raise ValueError(" '{}' not present in the vocabulary".format(item))

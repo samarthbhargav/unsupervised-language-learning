@@ -135,6 +135,7 @@ if __name__ == '__main__':
                 positive_matrix = []
                 for word in context_window_list:
                     if vocab.ust.remove_word(word):
+                        # TODO replace with UNK instead
                         continue
                     positive_matrix.append(vocab.one_hot(word))
 
