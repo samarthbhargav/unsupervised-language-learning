@@ -122,6 +122,8 @@ class UnigramSamplingTable:
 
     def remove_word(self, word, sample=0.001):
         z_wi = self.freq[word]/self.num_tokens
+        if z_wi == 0:
+            return False
         prob = ((math.sqrt(z_wi / sample) + 1)) * ((sample)/z_wi)
         return prob < random.random()
 
