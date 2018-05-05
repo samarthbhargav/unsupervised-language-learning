@@ -18,7 +18,7 @@ if __name__ == '__main__':
     skipped_count = 0
     existing_words = {}
     for l in lst:
-        if l.target_word not in wsm.word_index or l.target_word in existing_words.keys():
+        if l.target_word not in wsm.word_index or l.target_word in existing_words.keys() or l.target_word.isdigit():
             skipped_count += 1
             continue
         existing_words[l.target_word] = (wsm.most_similar(l.target_word, score=True, n=3))

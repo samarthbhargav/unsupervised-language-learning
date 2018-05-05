@@ -136,7 +136,7 @@ if __name__ == '__main__':
         print("Running epoch: ", epoch)
         epoch_loss = []
         for sentence_num, each_sentence in enumerate(sentences):
-            if sentence_num % 100 == 0:
+            if sentence_num % 1000 == 0:
                 tictoc.tic("Sentence: {} of {}".format(sentence_num + 1, vocab.sentence_count))
 
             for center_idx, center_word in enumerate(each_sentence):
