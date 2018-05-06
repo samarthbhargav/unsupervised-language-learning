@@ -63,14 +63,11 @@ class SkipGramModel(nn.Module):
 
         negative_embeddings = self.output_embeddings(negative_words)
 
-        neg_score = torch.matmul(input_embedding, negative_embeddings.t()).squeeze()
-
+        neg_score = torch.matmul(negative_embeddings, input_embedding.t()).squeeze()
         neg_score = torch.sum(neg_score)
-
         neg_score = F.logsigmoid(-1*neg_score).squeeze()
 
         loss = score + neg_score
-
         return -1*loss.sum()
 
     def get_embeddings(self):
@@ -105,12 +102,12 @@ if __name__ == '__main__':
     params = {
         "embedding_dim" : 10,
         "vocab_size": 10000,
-        "context_window": 2,
+        "context_window": 5,
         "n_negative": 5,
         "model_name": "test",
         "stop_words_file": None, # use sub-sampling instead
-        "n_epochs": 5,
-        "data_path": "data/hansards/training.en"
+        "n_epochs": 50,
+        "data_path": "data/wa/test.en"
     }
     #################
 
