@@ -30,7 +30,7 @@ class SkipGramModel(nn.Module):
 
         return (model, loss, params)
 
-    def __init__(self, vocab, embedding_dim, use_cuda=False):
+    def __init__(self, vocab, embedding_dim, use_cuda=True):
         super(SkipGramModel, self).__init__()
 
         self.vocab = vocab
@@ -43,6 +43,7 @@ class SkipGramModel(nn.Module):
         self.use_cuda = use_cuda
 
         if use_cuda:
+            print("sam, fuck you. i made it work with cuda :P.")
             self.input_embeddings = self.input_embeddings.cuda()
             self.output_embeddings = self.output_embeddings.cuda()
 
@@ -69,7 +70,10 @@ class SkipGramModel(nn.Module):
             inp = torch.LongTensor(np.array([idx]))
             if self.use_cuda:
                 inp = inp.cuda()
-            ematrix[eidx] = self.input_embeddings(inp).detach().numpy()
+            temp = self.input_embeddings(inp)
+            temp2 = temp.cpu()
+            temp3 = temp2.detach().numpy()
+            ematrix[eidx] = temp3
             words.append(word)
         return ematrix, words
 
