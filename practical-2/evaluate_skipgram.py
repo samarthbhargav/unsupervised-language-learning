@@ -18,14 +18,17 @@ if __name__ == '__main__':
     skipped_count = 0
     existing_words = {}
     for l in lst:
-        if l.target_word not in wsm.word_index or l.target_word in existing_words.keys() or l.target_word.isdigit():
+        if l.target_word not in wsm.word_index or l.sentence_id in existing_words.keys() or l.target_word.isdigit():
             skipped_count += 1
             continue
-        existing_words[l.target_word] = (wsm.most_similar(l.target_word, score=True, n=3))
+        existing_words[l.complete_word, l.sentence_id] = (wsm.most_similar(l.target_word, score=True, n=3))
         # print("Words skipped {}".format(skipped_count))
     print("Number of unique words in the file: ", len(existing_words))
 
+with open('lst.out', 'w+') as f:
     for k, v in existing_words.items():
-        # with open('output', 'w') as f:
-        #     f.append(k + "\t" + "\n")
-        print(k, v)
+        f.write('RANKED\t' + ' '.join(k))
+        for word, score in v:
+            f.write('\t' + word + ' ' + str(round(score, 4)) + '\t')
+        f.write('\n')
+        # f.write(k + v +  '\n')
