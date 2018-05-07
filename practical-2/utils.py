@@ -30,3 +30,17 @@ def save_object(object, path):
 def load_object(path):
     with open(path, "rb") as reader:
         return pkl.load(reader)
+
+class Mean:
+    def __init__(self):
+        self.n = 0
+        self.sum = 0
+
+    def add(self, val):
+        self.n += 1
+        self.sum += val
+
+    def mean(self):
+        if self.n == 0:
+            return 0
+        return self.sum / self.n

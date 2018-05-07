@@ -1,5 +1,4 @@
 import os
-import nltk
 import string
 import codecs
 import random
@@ -7,13 +6,12 @@ import collections
 import math
 
 import numpy as np
-from nltk.corpus import stopwords
 
-stop_words = stopwords.words('english') + list(string.punctuation)
 
-def read_stop_words(file_name):
+def read_stop_words(file_name, punctuation=True):
     with codecs.open(file_name, "r", "utf-8") as reader:
-        return [line.strip() for line in reader]
+        stop_words = [line.strip() for line in reader]
+    return stop_words.extend(list(string.punctuation))
 
 class SentenceIterator:
 
@@ -30,9 +28,8 @@ class SentenceIterator:
                 if len(line) < self.min_length or len(line) > self.max_length:
                     continue
                 line = [word.lower() for word in line]
-                # remove stop_words
-                # if self.stop_words:
-                line = [word for word in line if word not in stop_words and word.isalpha()]
+                if self.stop_words:
+                    line = [word for word in line if word not in self.stop_words]
                 yield line
 
 def get_context_words(sentence, index, context_window):
