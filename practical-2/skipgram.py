@@ -30,54 +30,46 @@ class SkipGramModel(nn.Module):
 
         return (model, loss, params)
 
-    def __init__(self, vocab, embedding_dim):
+    def __init__(self, vocab, embedding_dim, use_cuda=False):
         super(SkipGramModel, self).__init__()
 
         self.vocab = vocab
 
         self.embedding_dim = embedding_dim
 
-        # # TODO add noise
-        # self.input_embeddings = torch.zeros(self.embedding_dim, vocab.N)
-        # self.input_embeddings += torch.rand(self.input_embeddings.size())
-        # self.input_embeddings = nn.Parameter(self.input_embeddings)
-        #
-        # self.output_embeddings = torch.zeros(vocab.N, self.embedding_dim)
-        # self.output_embeddings += torch.rand(self.output_embeddings.size())
-        #
-        # self.output_embeddings = nn.Parameter(self.output_embeddings)
         self.input_embeddings = nn.Embedding(vocab.N, self.embedding_dim, sparse=True)
         self.output_embeddings = nn.Embedding(vocab.N, self.embedding_dim, sparse=True)
 
+        self.use_cuda = use_cuda
+
+        if use_cuda:
+            self.input_embeddings = self.input_embeddings.cuda()
+            self.output_embeddings = self.output_embeddings.cuda()
+
 
     def forward(self, center_word, positive_words, negative_words):
-        # input_embedding = torch.matmul(center_word, self.input_embeddings.t()).view(1, -1)
-        # positive_embeddings = torch.matmul(positive_words, self.input_embeddings.t())
-        # negative_embeddings = torch.matmul(negative_words, self.output_embeddings)
-        input_embedding = self.input_embeddings(center_word)
-        positive_embeddings = self.output_embeddings(positive_words)
 
-        score  = torch.mul(input_embedding, positive_embeddings)
-        score = torch.sum(score, dim=1)
-        score = F.logsigmoid(score).squeeze()
+        if self.use_cuda:
+            center_word = center_word.cuda()
+            positive_words = positive_words.cuda()
+            negative_words = negative_words.cuda()
 
-        negative_embeddings = self.output_embeddings(negative_words)
+        pos = self.input_embeddings(center_word) @ self.output_embeddings(positive_words).view(-1, 1)
+        log_pos = - F.logsigmoid(pos)
+        neg = self.output_embeddings(negative_words).neg() @  self.input_embeddings(center_word).view(-1, 1)
+        log_neg = - F.logsigmoid(neg)
 
-        neg_score = torch.matmul(input_embedding, negative_embeddings.t()).squeeze()
+        return (log_pos + log_neg.sum())
 
-        neg_score = torch.sum(neg_score)
-
-        neg_score = F.logsigmoid(-1*neg_score).squeeze()
-
-        loss = score + neg_score
-
-        return -1*loss.sum()
 
     def get_embeddings(self):
         ematrix = np.zeros((self.vocab.N, self.embedding_dim))
         words = []
         for eidx, (word, idx) in enumerate(self.vocab.index.items()):
-            ematrix[eidx] = self.input_embeddings(torch.LongTensor(np.array([idx]))).detach().numpy()
+            inp = torch.LongTensor(np.array([idx]))
+            if self.use_cuda:
+                inp = inp.cuda()
+            ematrix[eidx] = self.input_embeddings(inp).detach().numpy()
             words.append(word)
         return ematrix, words
 
@@ -99,23 +91,22 @@ def get_negative_matrix(vocab, n_negative):
         neg.append(vocab[neg_word])
     return np.array(neg)
 
+
+
 if __name__ == '__main__':
 
     ##### PARAMS ####
     params = {
-        "embedding_dim" : 10,
+        "embedding_dim" : 200,
         "vocab_size": 10000,
-        "context_window": 2,
+        "context_window": 5,
         "n_negative": 5,
         "model_name": "test",
         "stop_words_file": None, # use sub-sampling instead
-        "n_epochs": 5,
+        "n_epochs": 1,
         "data_path": "data/hansards/training.en"
     }
     #################
-
-
-    # this is not safe
     locals().update(params)
 
     stop_words = None
@@ -126,7 +117,6 @@ if __name__ == '__main__':
     vocab = Vocabulary(sentences, max_size = vocab_size)
 
     sgm = SkipGramModel(vocab, embedding_dim)
-    sgm.get_embeddings()
     optimizer = optim.SparseAdam(sgm.parameters())
 
     tictoc = utils.TicToc()
@@ -134,7 +124,7 @@ if __name__ == '__main__':
 
     for epoch in np.arange(1, n_epochs + 1):
         print("Running epoch: ", epoch)
-        epoch_loss = []
+        epoch_loss = utils.Mean()
         for sentence_num, each_sentence in enumerate(sentences):
             if sentence_num % 1000 == 0:
                 tictoc.tic("Sentence: {} of {}".format(sentence_num + 1, vocab.sentence_count))
@@ -158,16 +148,16 @@ if __name__ == '__main__':
                     continue
 
 
-                negative_matrix = get_negative_matrix(vocab, n_negative)
+                for positive_word in positive_matrix:
+                    negative_matrix = get_negative_matrix(vocab, n_negative)
+                    optimizer.zero_grad()
+                    loss = sgm.forward(torch.LongTensor(np.array([vocab[center_word]], dtype=np.long)),
+                                        torch.LongTensor(np.array([positive_word])), torch.LongTensor(negative_matrix))
+                    epoch_loss.add(loss.item())
+                    loss.backward()
+                    optimizer.step()
 
-                optimizer.zero_grad()
-                loss = sgm.forward(torch.LongTensor(np.array([vocab[center_word]], dtype=np.long)),
-                                    torch.LongTensor(np.array(positive_matrix)), torch.LongTensor(negative_matrix))
-                epoch_loss.append(loss.cpu().data.numpy())
-                loss.backward()
-                optimizer.step()
-
-        epoch_losses.append(np.mean(epoch_loss))
-        tictoc.tic("Epoch complete: Mean loss: {}".format(np.mean(epoch_loss)))
+        epoch_losses.append(epoch_loss.mean())
+        tictoc.tic("Epoch complete: Mean loss: {}".format(epoch_loss.mean()))
 
     sgm.save_model("./models", model_name, epoch_losses, params)
