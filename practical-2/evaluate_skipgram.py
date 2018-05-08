@@ -31,7 +31,7 @@ if __name__ == '__main__':
         # print("Words skipped {}".format(skipped_count))
     print("Number of unique words in the file: ", len(existing_words))
 
-    with open('lst.out', 'w+') as f:
+    with open('skipgram_lst.out', 'w+') as f:
         for k, v in existing_words.items():
             f.write('RANKED\t' + ' '.join(k))
             for word, score in v:
