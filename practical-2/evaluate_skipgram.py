@@ -1,33 +1,55 @@
 import utils
+import gensim
 
-from similarity import WordSimilarityModel
-from lst_data import LstIterator, LstItem
+from similarity import cosine_similarity
+from lst_data import LstIterator
 from skipgram import SkipGramModel
 
 if __name__ == '__main__':
     print("Hello World")
-    model_name = "test"
+    model_name = "skipgram"
     model_root = "./models"
-    filename = "./data/lst/lst_test.preprocessed"
+    test_file = "./data/lst/lst_test.preprocessed"
+    gold_file = "./data/lst/lst.gold.candidates"
     print("Loading: ", model_name)
-    model, loss, params = SkipGramModel.load(model_root, model_name)
+    sgm_model, loss, params = SkipGramModel.load(model_root, model_name)
     print("Loaded. Creating embeddings")
-    ematrix, words = model.get_embeddings()
+    sgm_ematrix, sgm_words = sgm_model.get_embeddings()
 
-    vocab = model.vocab
+    gold = LstIterator(gold_file, category="subs")
+    gold_list = []
+    for i in gold:
+        gold_list.append(i.full_sentence)
+    gold_list.append(sgm_words)
+
+    w2v = gensim.models.Word2Vec(gold_list, min_count=1, size=200)
+
+    gold_dict = {i.target_word: i.substitutes for i in gold}
+    # sgm_dict = {sgm_words[i]: sgm_ematrix[i] for i in range(len(sgm_words))}
+
+    temp={}
+
+    for target_gold, gold_subs in gold_dict.items():
+        for target_test in sgm_words:
+            if target_test == target_gold:
+                temp[target_test] = gold_subs
 
     print("Computing similarities")
-    wsm = WordSimilarityModel(words, ematrix)
-    lst = LstIterator(filename)
+    lst = LstIterator(test_file, category = "test")
     skipped_count = 0
     existing_words = {}
+
     for i, l in enumerate(lst):
-        print("Word: ", i)
-        if l.target_word not in wsm.word_index or l.sentence_id in existing_words.keys() or l.target_word.isdigit():
+    #     print("Word: ", i)
+        if l.target_word not in temp.keys() or l.sentence_id in existing_words.keys() or l.target_word.isdigit():
             skipped_count += 1
             existing_words[l.complete_word, l.sentence_id] = []
             continue
-        existing_words[l.complete_word, l.sentence_id] = wsm.most_similar(l.target_word, score=True, n=10)
+        temp_list = []
+        for each_subs in temp[l.target_word]:
+            temp_cosine = cosine_similarity(w2v.wv[l.target_word], w2v.wv[each_subs])
+            temp_list.append((each_subs, temp_cosine))
+        existing_words[l.complete_word, l.sentence_id] = temp_list
         # print("Words skipped {}".format(skipped_count))
     print("Number of unique words in the file: ", len(existing_words))
 
