@@ -47,19 +47,30 @@ class SkipGramModel(nn.Module):
             self.output_embeddings = self.output_embeddings.cuda()
 
 
-    def forward(self, center_word, positive_words, negative_words):
+    def forward(self, center_words, positive_words, negative_words):
 
         if self.use_cuda:
-            center_word = center_word.cuda()
+            center_words = center_words.cuda()
             positive_words = positive_words.cuda()
             negative_words = negative_words.cuda()
 
-        pos = self.input_embeddings(center_word) @ self.output_embeddings(positive_words).view(-1, 1)
-        log_pos = - F.logsigmoid(pos)
-        neg = self.output_embeddings(negative_words).neg() @  self.input_embeddings(center_word).view(-1, 1)
-        log_neg = - F.logsigmoid(neg)
+        center_embedding = self.input_embeddings(center_words)
+        positive_embeddings = self.output_embeddings(positive_words)
+        negative_embeddings = self.output_embeddings(negative_words)
 
-        return (log_pos + log_neg.sum())
+        batch_size = center_words.size(0)
+
+        #pos = center_embedding @ positive_embeddings.t()
+        # from https://discuss.pytorch.org/t/dot-product-batch-wise/9746/3
+        center_pos_dot = torch.bmm(center_embedding.view(batch_size, 1, self.embedding_dim), positive_embeddings.view(batch_size, embedding_dim, 1))
+        log_pos = - F.logsigmoid(center_pos_dot)
+
+        # each row = 1 word's negative embeddings
+        center_neg_dot = torch.matmul(center_embedding, negative_embeddings.t())
+        log_neg = - F.logsigmoid(center_neg_dot)
+        log_neg = log_neg.sum(1)
+
+        return (log_pos + log_neg).mean()
 
 
     def get_embeddings(self):
@@ -85,15 +96,56 @@ class SkipGramModel(nn.Module):
         utils.save_object(loss, os.path.join(path, model_name + "_loss"))
         utils.save_object(params, os.path.join(path, model_name + "_params"))
 
-def get_negative_matrix(vocab, n_negative):
+def get_negative_batch(vocab, n_negative, positive_words):
     neg = []
     while len(neg) < n_negative:
         neg_word = vocab.ust.sample()
-        if neg_word not in vocab.index:
+        if neg_word not in vocab.index or neg_word in positive_words:
             continue
         neg.append(vocab[neg_word])
     return np.array(neg)
 
+
+def batch_iterator(sentences, vocab, batch_size, n_negative):
+    batch_center = np.zeros(batch_size)
+    batch_context = np.zeros(batch_size)
+    batch_index = 0
+    batch_pos_words = set()
+
+    batch_number = 0
+    for sentence_num, each_sentence in enumerate(sentences):
+        for center_idx, center_word in enumerate(each_sentence):
+            if center_word not in vocab.index:
+                continue
+
+            context_window_list = get_context_words(vocab.process(each_sentence), center_idx, context_window)
+
+            for positive_word in context_window_list:
+                # sub-sampling
+                if vocab.ust.remove_word(positive_word):
+                    continue
+
+                batch_center[batch_index] = vocab[center_word]
+                batch_context[batch_index] = vocab[positive_word]
+                batch_pos_words.add(positive_word)
+                batch_index += 1
+                if batch_index == batch_size:
+                    negative_words = get_negative_batch(vocab, n_negative, batch_pos_words)
+                    yield torch.LongTensor(batch_center), torch.LongTensor(batch_context), torch.LongTensor(negative_words)
+
+                    batch_center = np.zeros(batch_size)
+                    batch_context = np.zeros(batch_size)
+                    batch_index = 0
+                    batch_pos_words = set()
+
+                    batch_number += 1
+                    if batch_number % 5000 == 0:
+                        tictoc.tic("Sentence: {} of {}. Batches Processed: {}".format(sentence_num + 1, vocab.sentence_count, batch_number))
+
+    # last batch
+    if batch_index > 0:
+        yield torch.LongTensor(batch_center), torch.LongTensor(batch_context), torch.LongTensor(negative_words)
+        tictoc.tic("Sentence: {} of {}. Batches Processed: {}".format(sentence_num + 1, vocab.sentence_count, batch_number))
 
 
 if __name__ == '__main__':
@@ -107,8 +159,9 @@ if __name__ == '__main__':
         "model_name": "test",
         "stop_words_file": None, # use sub-sampling instead
         "n_epochs": 10,
-        "data_path": "data/wa/test.en",
+        "data_path": "data/hansards/training.en",
         "use_cuda": False,
+        "batch_size": 500,
     }
     #################
     locals().update(params)
@@ -129,37 +182,13 @@ if __name__ == '__main__':
     for epoch in np.arange(1, n_epochs + 1):
         print("Running epoch: ", epoch)
         epoch_loss = utils.Mean()
-        for sentence_num, each_sentence in enumerate(sentences):
-            if sentence_num % 1000 == 0:
-                tictoc.tic("Sentence: {} of {}".format(sentence_num + 1, vocab.sentence_count))
-
-            for center_idx, center_word in enumerate(each_sentence):
-                if center_word not in vocab.index:
-                    continue
-
-                center_word_vector = vocab.one_hot(center_word)
-
-                context_window_list = get_context_words(vocab.process(each_sentence), center_idx, context_window)
-
-                positive_matrix = []
-                for word in context_window_list:
-                    # sub-sampling
-                    if vocab.ust.remove_word(word):
-                        continue
-                    positive_matrix.append(vocab[word])
-
-                if len(positive_matrix) == 0:
-                    continue
-
-
-                for positive_word in positive_matrix:
-                    negative_matrix = get_negative_matrix(vocab, n_negative)
-                    optimizer.zero_grad()
-                    loss = sgm.forward(torch.LongTensor(np.array([vocab[center_word]], dtype=np.long)),
-                                        torch.LongTensor(np.array([positive_word])), torch.LongTensor(negative_matrix))
-                    epoch_loss.add(loss.item())
-                    loss.backward()
-                    optimizer.step()
+        for batch in batch_iterator(sentences, vocab, batch_size, n_negative):
+            batch_center, batch_context, negative_words = batch
+            optimizer.zero_grad()
+            loss = sgm.forward(batch_center, batch_context, negative_words)
+            epoch_loss.add(loss.item())
+            loss.backward()
+            optimizer.step()
 
         epoch_losses.append(epoch_loss.mean())
         tictoc.tic("Epoch complete: Mean loss: {}".format(epoch_loss.mean()))
