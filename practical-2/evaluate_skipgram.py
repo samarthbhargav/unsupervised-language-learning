@@ -1,13 +1,13 @@
 import utils
 import gensim
 
-from similarity import cosine_similarity
+from similarity import cosine_similarity, WordSimilarityModel
 from lst_data import LstIterator
 from skipgram import SkipGramModel
 
 if __name__ == '__main__':
     print("Hello World")
-    model_name = "skipgram"
+    model_name = "test"
     model_root = "./models"
     test_file = "./data/lst/lst_test.preprocessed"
     gold_file = "./data/lst/lst.gold.candidates"
@@ -16,13 +16,9 @@ if __name__ == '__main__':
     print("Loaded. Creating embeddings")
     sgm_ematrix, sgm_words = sgm_model.get_embeddings()
 
-    gold = LstIterator(gold_file, category="subs")
-    gold_list = []
-    for i in gold:
-        gold_list.append(i.full_sentence)
-    gold_list.append(sgm_words)
+    similarity = WordSimilarityModel(sgm_words, sgm_ematrix)
 
-    w2v = gensim.models.Word2Vec(gold_list, min_count=1, size=200)
+    gold = LstIterator(gold_file, category="subs")
 
     gold_dict = {i.target_word: i.substitutes for i in gold}
     # sgm_dict = {sgm_words[i]: sgm_ematrix[i] for i in range(len(sgm_words))}
@@ -47,7 +43,10 @@ if __name__ == '__main__':
             continue
         temp_list = []
         for each_subs in temp[l.target_word]:
-            temp_cosine = cosine_similarity(w2v.wv[l.target_word], w2v.wv[each_subs])
+            if each_subs not in similarity.word_index:
+                continue
+            #temp_cosine = cosine_similarity(w2v.wv[l.target_word], w2v.wv[each_subs])
+            temp_cosine = cosine_similarity(similarity[l.target_word], similarity[each_subs])
             temp_list.append((each_subs, temp_cosine))
         existing_words[l.complete_word, l.sentence_id] = temp_list
         # print("Words skipped {}".format(skipped_count))
