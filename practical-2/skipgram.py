@@ -25,7 +25,7 @@ class SkipGramModel(nn.Module):
         params = utils.load_object(os.path.join(path, model_name + "_params"))
         vocab = utils.load_object(os.path.join(path, model_name + "_vocab"))
 
-        model = SkipGramModel(vocab, params["embedding_dim"])
+        model = SkipGramModel(vocab, params["embedding_dim"], params["use_cuda"])
         model.load_state_dict(torch.load(os.path.join(path, model_name)))
 
         return (model, loss, params)
@@ -43,7 +43,6 @@ class SkipGramModel(nn.Module):
         self.use_cuda = use_cuda
 
         if use_cuda:
-            print("sam, fuck you. i made it work with cuda :P.")
             self.input_embeddings = self.input_embeddings.cuda()
             self.output_embeddings = self.output_embeddings.cuda()
 
@@ -107,8 +106,9 @@ if __name__ == '__main__':
         "n_negative": 5,
         "model_name": "test",
         "stop_words_file": None, # use sub-sampling instead
-        "n_epochs": 1,
-        "data_path": "data/hansards/training.en"
+        "n_epochs": 10,
+        "data_path": "data/wa/test.en",
+        "use_cuda": False,
     }
     #################
     locals().update(params)
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     sentences = SentenceIterator(data_path, stop_words=stop_words)
     vocab = Vocabulary(sentences, max_size = vocab_size)
 
-    sgm = SkipGramModel(vocab, embedding_dim)
+    sgm = SkipGramModel(vocab, embedding_dim, use_cuda=use_cuda)
     optimizer = optim.SparseAdam(sgm.parameters())
 
     tictoc = utils.TicToc()
