@@ -32,13 +32,16 @@ class SentenceIterator:
                     line = [word for word in line if word not in self.stop_words]
                 yield line
 
-def get_context_words(sentence, index, context_window):
+def get_context_words(sentence, index, context_window, pad=False):
     n_ = context_window // 2
-    context = set()
+    context = list()
     for i in range(index - n_, index + n_ + 1):
         if i == index or i < 0 or i >= len(sentence):
             continue
-        context.add(sentence[i])
+        context.append(sentence[i])
+    if pad :
+        while len(context) < (context_window-1):
+            context.append("$PAD$")
     return context
 
 
@@ -48,7 +51,7 @@ class Vocabulary:
     # TODO remove stop words
     def __init__(self, sentences, max_size = 10000, special_tokens = None):
         if special_tokens is None:
-            special_tokens = {"$UNK$", "$EOS$", "$SOS$", "$PAD"}
+            special_tokens = {"$UNK$", "$EOS$", "$SOS$", "$PAD$"}
         self.index  = {}
 
         self.ust = UnigramSamplingTable()
@@ -130,9 +133,4 @@ class UnigramSamplingTable:
         return prob < random.random()
 
 if __name__ == '__main__':
-    sentences = SentenceIterator("data/hansards/training.en")
-    v = Vocabulary(sentences)
-    remove = [v.ust.remove_word("the") for _ in range(100)]
-    print(remove)
-    neg = v.ust.sample()
-    print(neg)
+    print(get_context_words("This is a sentence".split(), 3, 5, True))
