@@ -154,7 +154,7 @@ if __name__ == '__main__':
     params = {
         "embedding_dim" : 200,
         "vocab_size": 10000,
-        "context_window": 5,
+        "context_window": 7,
         "n_negative": 5,
         "model_name": "test",
         "stop_words_file": None, # use sub-sampling instead
