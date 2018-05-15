@@ -1,30 +1,91 @@
-import utils
+import collections
 
-from lst_data import LstIterator, LstItem
+import torch
+import numpy as np
+import torch.distributions as distb
+
+import utils
+from utils import kl_div
+from lst_data import LstIterator
+from data import get_context_words
+from similarity import cosine_similarity
 from bayesian_skipgram import BayesianSkipgram
 
-def compute_score(lst_item, method="mean"):
-    pass
+def save_scores(lst, scores, file_name):
+    with open(file_name, 'w') as f:
+        for lst_item in lst:
+            f.write("RANKED\t {} {}".format(lst_item.complete_word, lst_item.sentence_id))
+            for candidate, score in scores[lst_item.complete_word, lst_item.sentence_id]:
+                f.write('\t' + candidate + ' ' + str(round(score, 4)) + '\t')
+            f.write("\n")
 
+def get_normal(mu, sigma):
+    return distb.MultivariateNormal(mu, torch.diag(sigma.squeeze()))
 
 if __name__ == '__main__':
     model_name = "test_bn"
     model_root = "./models"
-    filename = "./data/lst/lst_test.preprocessed"
+    test_file = "./data/lst/lst_test.preprocessed"
+    gold_file = "./data/lst/lst.gold.candidates"
+    print("Loading: ", model_name)
     model, loss, params = BayesianSkipgram.load(model_root, model_name)
-
+    context_window = params["context_window"]
     vocab = model.vocab
 
-    lst = LstIterator(filename)
-    skipped_count = 0
-    existing_words = {}
-    for l in lst:
-        print(l)
+    gold = LstIterator(gold_file, category="subs")
+    gold_dict = {i.target_word: i.substitutes for i in gold}
 
-        # print("Words skipped {}".format(skipped_count))
-    print("Number of unique words in the file: ", len(existing_words))
+    lst = LstIterator(test_file, category = "test")
 
-    for k, v in existing_words.items():
-        # with open('output', 'w') as f:
-        #     f.append(k + "\t" + "\n")
-        print(k, v)
+    skipped = 0
+    skipped_incorrect_parse = 0
+    scores_mu = collections.defaultdict(list)
+    scores_kl_post = collections.defaultdict(list)
+    scores_kl_prior = collections.defaultdict(list)
+
+    for lst_item in lst:
+        # first compute target distributions
+        center_word = lst_item.target_word
+        center_idx = lst_item.target_pos
+
+        # a sanity check
+        assert (lst_item.complete_word, lst_item.sentence_id) not in scores_mu
+
+        if center_word not in vocab.index:
+            print("Center Word {} not in vocab".format(center_word))
+            skipped += 1
+            continue
+
+
+
+        context_words = get_context_words(vocab.process(lst_item.tokenized_sentence), center_idx, context_window, pad=True)
+        context_vec = np.zeros(len(context_words))
+        for i, context_word in enumerate(context_words):
+            context_vec[i] = vocab[context_word]
+
+        center_vec = torch.LongTensor(np.array([vocab[center_word]]))
+        mu, sigma, inf_mu, inf_sigma, z = model.get_distribution(center_vec, torch.LongTensor(context_vec))
+
+        #print(mu, sigma, inf_mu, inf_sigma, z)
+        for gold_candidate in gold_dict[lst_item.target_word]:
+            if gold_candidate not in vocab.index:
+                # TODO print something out and track
+                continue
+            vec = torch.LongTensor(np.array([vocab[gold_candidate]]))
+            mu_s, sigma_s, inf_mu_s, inf_sigma_s, z_s = model.get_distribution(vec, torch.LongTensor(context_vec))
+            score_mu = cosine_similarity(mu.squeeze().detach().cpu().numpy(), mu_s.squeeze().detach().cpu().numpy())
+            scores_mu[lst_item.complete_word, lst_item.sentence_id].append((gold_candidate, score_mu))
+
+            # TODO not sure if minus is reqd
+            # posterior (word) (inf) || prior (candidate)
+            kl_prior = -1 * kl_div(inf_mu, inf_sigma, mu_s, sigma_s)
+            scores_kl_prior[lst_item.complete_word, lst_item.sentence_id].append((gold_candidate, kl_prior.item()))
+
+            kl_post = -1 * kl_div(inf_mu, inf_sigma, inf_mu_s, inf_sigma_s)
+            scores_kl_post[lst_item.complete_word, lst_item.sentence_id].append((gold_candidate, kl_post.item()))
+
+    print("Skipped: {}".format(skipped))
+
+    save_scores(lst, scores_mu, "bs_mu_lst.out")
+    save_scores(lst, scores_kl_post, "bs_kl_post_lst.out")
+    save_scores(lst, scores_kl_prior, "bs_kl_prior_lst_mu.out")

@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     for i, l in enumerate(lst):
     #     print("Word: ", i)
-        if l.target_word not in temp.keys() or l.sentence_id in existing_words.keys() or l.target_word.isdigit():
+        if l.target_word not in temp.keys() or l.sentence_id in existing_words.keys():
             skipped_count += 1
             existing_words[l.complete_word, l.sentence_id] = []
             continue

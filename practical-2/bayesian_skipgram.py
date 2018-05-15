@@ -19,6 +19,7 @@ import numpy as np
 
 from data import SentenceIterator, Vocabulary, get_context_words, read_stop_words
 import utils
+from utils import kl_div
 
 
 
@@ -32,7 +33,7 @@ class BayesianSkipgram(nn.Module):
         params = utils.load_object(os.path.join(path, model_name + "_params"))
         vocab = utils.load_object(os.path.join(path, model_name + "_vocab"))
 
-        model = BayesianSkipgram(vocab, params["z_embedding_dim"])
+        model = BayesianSkipgram(vocab, params["z_embedding_dim"], params["use_cuda"])
         model.load_state_dict(torch.load(os.path.join(path, model_name)))
 
         return (model, loss, params)
@@ -123,8 +124,10 @@ class BayesianSkipgram(nn.Module):
                 loss_probs[i] = logprobs[context_word]
 
             reconstruction_loss = loss_probs.sum(-1)
-            kl_loss = torch.log(sigma/inf_sigma) + (inf_sigma.pow(2) + (inf_mu - sigma).pow(2)) / (2*sigma.pow(2)) - 0.5
-            kl_loss = kl_loss.sum()
+            kl_loss = kl_div(inf_mu, inf_sigma, mu, sigma)
+
+            #kl_loss = torch.log(sigma/inf_sigma) + (inf_sigma.pow(2) + (inf_mu - mu).pow(2)) / (2*sigma.pow(2)) - 0.5
+            #kl_loss = kl_loss.sum()
 
             loss = kl_loss - reconstruction_loss
             if np.isnan(loss.item()):
@@ -181,8 +184,7 @@ if __name__ == '__main__':
 
     ##### PARAMS ####
     params = {
-        "embedding_dim": 200,
-        "z_embedding_dim" : 2000,
+        "z_embedding_dim" : 200,
         "vocab_size" : 10000,
         "context_window" : 7,
         "n_epochs" : 3,
