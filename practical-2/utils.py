@@ -44,3 +44,7 @@ class Mean:
         if self.n == 0:
             return 0
         return self.sum / self.n
+
+def kl_div(mu_1, sigma_1, mu_2, sigma_2):
+    div = torch.log(sigma_2) - torch.log(sigma_1) + (sigma_1.pow(2) + (mu_1 - mu_2).pow(2)) / (2*sigma_2.pow(2)) - 0.5
+    return div.sum()

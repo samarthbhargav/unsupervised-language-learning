@@ -28,7 +28,7 @@ class LstItem:
         self.target_word = sentence[0].split(".")[0]
         self.complete_word = sentence[0]
         self.sentence_id = sentence[1]
-        self.target_pos = sentence[2]
+        self.target_pos = int(sentence[2])
         self.tokenized_sentence = sentence[3:]
 
 class GoldSubstitutes:
