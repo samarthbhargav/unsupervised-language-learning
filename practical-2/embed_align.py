@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import numpy as np
 
 from data import SentenceIterator, Vocabulary, get_context_words, read_stop_words
+from skipgram import get_negative_batch
 import utils
 
 
@@ -85,10 +86,20 @@ class EmbedAlignModel(nn.Module):
         self.y_affine_2 = nn.Linear(self.embedding_dim, self.vocab_y.N)
 
 
+        # deteministic embedding used for the softmax approximation
+        self.softmax_approx_x = nn.Embedding(self.vocab_x.N, self.embedding_dim)
+        self.softmax_approx_y = nn.Embedding(self.vocab_y.N, self.embedding_dim)
 
-    def forward(self, x, y):
+
+    def approximate_softmax(self, x, x_neg, z, approx_embed):
+        numerator = torch.exp(torch.matmul(z, approx_embed(x)))
+        denominator = torch.exp(torch.matmul(z, approx_embed(x_neg).t()))
+        return numerator / (numerator + denominator.sum())
+
+    def forward(self, x, y, neg_x, neg_y):
         x_embed = self.internal_embedding(x)
-
+        neg_x_embed = self.internal_embedding(neg_x)
+        neg_y_embed = self
         hidden_op = torch.zeros(x_embed.size(0), self.embedding_dim)
 
         hidden_state = (torch.randn(2, 1, self.embedding_dim),
@@ -100,7 +111,7 @@ class EmbedAlignModel(nn.Module):
         kl_sum = torch.zeros(1)
 
         cat_yi_all = torch.zeros(x.size(0), self.vocab_y.N)
-
+        z_i_all = torch.zeros(x.size(0), self.embedding_dim)
         for idx, (i, x_i) in enumerate(zip(x_embed, x)):
 
             out, hidden_state = self.lstm(i.view(1, 1, -1), hidden_state)
@@ -115,15 +126,16 @@ class EmbedAlignModel(nn.Module):
 
 
             z_i = mu + torch.mul(self.standard_normal.sample().detach(), sigma).squeeze()
+            z_i_all[idx] = z_i
+            # cat_xi = F.relu(self.x_affine_1(z_i))
+            # cat_xi = F.log_softmax(self.x_affine_2(cat_xi)).squeeze()
+            #
+            # log_xi_sum += cat_xi[x_i]
+            log_xi_sum += self.approximate_softmax(x_i, neg_x, z_i, self.softmax_approx_x)
 
-            cat_xi = F.relu(self.x_affine_1(z_i))
-            cat_xi = F.log_softmax(self.x_affine_2(cat_xi)).squeeze()
-
-            log_xi_sum += cat_xi[x_i]
-
-            cat_yi = F.relu(self.y_affine_1(z_i))
-            cat_yi = F.softmax(self.y_affine_2(cat_yi)).squeeze()
-            cat_yi_all[idx] = cat_yi
+            # cat_yi = F.relu(self.y_affine_1(z_i))
+            # cat_yi = F.softmax(self.y_affine_2(cat_yi)).squeeze()
+            # cat_yi_all[idx] = cat_yi
 
             mu_2 = Variable(torch.zeros(self.embedding_dim), requires_grad=True)
             sigma_2 = Variable(torch.ones(self.embedding_dim), requires_grad=True)
@@ -132,14 +144,17 @@ class EmbedAlignModel(nn.Module):
 
             kl_sum += kl_loss.sum()
 
+
+
         log_yi_sum = torch.zeros(1)
 
         a_j = 1 / x.size(0)
-        for yy in np.arange(y.size(0)):
-            for cat_yi in cat_yi_all:
-                log_yi_sum += torch.log(a_j * cat_yi[yy])
-
-        #print(log_yi_sum, log_xi_sum, kl_sum)
+        # for yy in np.arange(y.size(0)):
+        #     for cat_yi in cat_yi_all:
+        #         log_yi_sum += torch.log(a_j * cat_yi[yy])
+        for y_i in y:
+            for a_m in np.arange(0, x.size(0)):
+                log_yi_sum += a_j * self.approximate_softmax(y_i, neg_y, z_i_all[a_m], self.softmax_approx_y)
 
         # single sample loss
         pos_loss = log_xi_sum + log_yi_sum - kl_sum
@@ -165,23 +180,24 @@ class EmbedAlignModel(nn.Module):
 
 def to_index(sentence, vocab):
     sentence = vocab.process(sentence)
-    return [vocab[word] for word in sentence]
+    return [vocab[word] for word in sentence], [word for word in sentence]
 
 
 if __name__ == '__main__':
 
     ##### PARAMS ####
     params = {
-        "embedding_dim" : 100,
-        "vocab_x": 1000,
-        "vocab_y": 1000,
+        "embedding_dim" : 200,
+        "vocab_x": 10000,
+        "vocab_y": 10000,
         "n_epochs": 3,
         "random_state" : 42,
         "en_data_path" : "data/wa/test.en",
         "fr_data_path" : "data/wa/test.fr",
         "model_name": "test_ea",
-        "en_stop_words_path" : "data/en_stopwords.txt",
-        "fr_stop_words_path" : None # TODO
+        "en_stop_words_path" : None,
+        "fr_stop_words_path" : None,
+        "n_negative": 100
     }
     #################
 
@@ -210,13 +226,19 @@ if __name__ == '__main__':
         print("Running epoch: ", epoch)
         epoch_loss = utils.Mean()
         for sentence_num, (en_sentence, fr_sentence) in enumerate(zip(en_sentences, fr_sentences)):
-            if sentence_num % 100 == 0:
+            if sentence_num % 10 == 0:
                 tictoc.tic("Sentence: {} of {}: Mean Loss: {}".format(sentence_num + 1, en_vocab.sentence_count, epoch_loss.mean()))
 
-            en_matrix = torch.LongTensor(to_index(en_sentence, en_vocab))
-            fr_matrix = torch.LongTensor(to_index(fr_sentence, fr_vocab))
+            en_matrix, en_words = to_index(en_sentence, en_vocab)
+            en_matrix = torch.LongTensor(en_matrix)
+            fr_matrix, fr_words = to_index(fr_sentence, fr_vocab)
+            fr_matrix = torch.LongTensor(fr_matrix)
+
+            neg_samples_en = get_negative_batch(en_vocab, n_negative, en_words)
+            neg_samples_fr = get_negative_batch(fr_vocab, n_negative, fr_words)
+
             optimizer.zero_grad()
-            loss = eam(en_matrix, fr_matrix)
+            loss = eam(en_matrix, fr_matrix, torch.LongTensor(neg_samples_en), torch.LongTensor(neg_samples_fr))
             loss.backward()
             optimizer.step()
             epoch_loss.add(loss.item())

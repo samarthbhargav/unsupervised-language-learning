@@ -80,6 +80,7 @@ class BayesianSkipgram(nn.Module):
             context_words_batch = context_words_batch.cuda()
 
         total_loss = torch.zeros(x_batch.size(0))
+        context_size = context_words_batch.size(1)
 
         if self.use_cuda:
             total_loss = total_loss.cuda()
@@ -174,16 +175,16 @@ if __name__ == '__main__':
     ##### PARAMS ####
     params = {
         "embedding_dim": 200,
-        "z_embedding_dim" : 100,
+        "z_embedding_dim" : 2000,
         "vocab_size" : 10000,
         "context_window" : 7,
-        "n_epochs" : 10,
+        "n_epochs" : 3,
         "random_state" : 42,
         "data_path" : "data/hansards/training.en",
         "stop_words_file" : "data/en_stopwords.txt",
         "model_name" : "test_bn",
         "use_cuda" : False,
-        "batch_size": 16
+        "batch_size": 128
     }
     #################
     locals().update(params)
@@ -208,7 +209,11 @@ if __name__ == '__main__':
         print("Running epoch: ", epoch)
         epoch_loss = utils.Mean()
 
-        for batch in batch_iterator(sentences, vocab, batch_size, context_window):
+        for batch_number, batch in enumerate(batch_iterator(sentences, vocab, batch_size, context_window)):
+
+            if batch_number % 10 == 0:
+                tictoc.tic("Batches Processed: {} , Mean Loss: {}".format(batch_number + 1, epoch_loss.mean()))
+
 
             optimizer.zero_grad()
 
@@ -224,7 +229,7 @@ if __name__ == '__main__':
 
         epoch_losses.append(epoch_loss.mean())
         tictoc.tic("Epoch complete: Mean loss: {}".format(epoch_loss.mean()))
-
+100
     bsm.save_model("./models", model_name, epoch_losses, params)
 
     del bsm
