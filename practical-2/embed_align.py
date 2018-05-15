@@ -125,7 +125,7 @@ class EmbedAlignModel(nn.Module):
 
             sigma = F.relu(self.sigma_affine_1(hidden_sum))
             sigma = F.softplus(self.sigma_affine_2(sigma))
-            sigma_all[idx] = mu
+            sigma_all[idx] = sigma
 
             z_i = mu + torch.mul(self.standard_normal.sample().detach(), sigma).squeeze()
             z_i_all[idx] = z_i
@@ -196,9 +196,9 @@ if __name__ == '__main__':
         "vocab_y": 10000,
         "n_epochs": 3,
         "random_state" : 42,
-        "en_data_path" : "data/wa/test.en",
-        "fr_data_path" : "data/wa/test.fr",
-        "model_name": "test_ea",
+        "en_data_path" : "data/hansards/small_training.en",
+        "fr_data_path" : "data/hansards/small_training.fr",
+        "model_name": "embed_align_small",
         "en_stop_words_path" : None,
         "fr_stop_words_path" : None,
         "n_negative": 100
