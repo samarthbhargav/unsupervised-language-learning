@@ -5,22 +5,11 @@ import numpy as np
 import torch.distributions as distb
 
 import utils
-from utils import kl_div
+from utils import kl_div, save_scores
 from lst_data import LstIterator
 from data import get_context_words
 from similarity import cosine_similarity
 from bayesian_skipgram import BayesianSkipgram
-
-def save_scores(lst, scores, file_name):
-    with open(file_name, 'w') as f:
-        for lst_item in lst:
-            f.write("RANKED\t {} {}".format(lst_item.complete_word, lst_item.sentence_id))
-            for candidate, score in scores[lst_item.complete_word, lst_item.sentence_id]:
-                f.write('\t' + candidate + ' ' + str(round(score, 4)) + '\t')
-            f.write("\n")
-
-def get_normal(mu, sigma):
-    return distb.MultivariateNormal(mu, torch.diag(sigma.squeeze()))
 
 if __name__ == '__main__':
     model_name = "test_bn"
