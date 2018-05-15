@@ -1,7 +1,6 @@
-import codecs
-import random
 import sys
-
+import random
+import codecs
 
 def sentence_iterator(file):
     with codecs.open(file, "r", "utf-8") as reader:

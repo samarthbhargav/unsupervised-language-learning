@@ -12,6 +12,7 @@ import numpy as np
 from data import SentenceIterator, Vocabulary, get_context_words, read_stop_words
 from skipgram import get_negative_batch
 import utils
+from utils import kl_div
 
 
 # UNK
@@ -94,24 +95,24 @@ class EmbedAlignModel(nn.Module):
     def approximate_softmax(self, x, x_neg, z, approx_embed):
         numerator = torch.exp(torch.matmul(z, approx_embed(x)))
         denominator = torch.exp(torch.matmul(z, approx_embed(x_neg).t()))
+        # praise the Adam gods and forget the constant terms
         return numerator / (numerator + denominator.sum())
 
-    def forward(self, x, y, neg_x, neg_y):
+    def x_inference(self, x, neg_x):
         x_embed = self.internal_embedding(x)
         neg_x_embed = self.internal_embedding(neg_x)
-        neg_y_embed = self
         hidden_op = torch.zeros(x_embed.size(0), self.embedding_dim)
 
         hidden_state = (torch.randn(2, 1, self.embedding_dim),
                     torch.randn(2, 1, self.embedding_dim))
 
         log_xi_sum = torch.zeros(1)
-        log_yi_sum = torch.zeros(1)
-
         kl_sum = torch.zeros(1)
 
-        cat_yi_all = torch.zeros(x.size(0), self.vocab_y.N)
         z_i_all = torch.zeros(x.size(0), self.embedding_dim)
+        mu_all = torch.zeros(x.size(0), self.embedding_dim)
+        sigma_all = torch.zeros(x.size(0), self.embedding_dim)
+
         for idx, (i, x_i) in enumerate(zip(x_embed, x)):
 
             out, hidden_state = self.lstm(i.view(1, 1, -1), hidden_state)
@@ -120,41 +121,46 @@ class EmbedAlignModel(nn.Module):
 
             mu = F.relu(self.mu_affine_1(hidden_sum))
             mu = self.mu_affine_2(mu)
+            mu_all[idx] = mu
 
             sigma = F.relu(self.sigma_affine_1(hidden_sum))
             sigma = F.softplus(self.sigma_affine_2(sigma))
-
+            sigma_all[idx] = mu
 
             z_i = mu + torch.mul(self.standard_normal.sample().detach(), sigma).squeeze()
             z_i_all[idx] = z_i
-            # cat_xi = F.relu(self.x_affine_1(z_i))
-            # cat_xi = F.log_softmax(self.x_affine_2(cat_xi)).squeeze()
-            #
-            # log_xi_sum += cat_xi[x_i]
-            log_xi_sum += self.approximate_softmax(x_i, neg_x, z_i, self.softmax_approx_x)
 
-            # cat_yi = F.relu(self.y_affine_1(z_i))
-            # cat_yi = F.softmax(self.y_affine_2(cat_yi)).squeeze()
-            # cat_yi_all[idx] = cat_yi
+            log_xi_sum += self.approximate_softmax(x_i, neg_x, z_i, self.softmax_approx_x)
 
             mu_2 = Variable(torch.zeros(self.embedding_dim), requires_grad=True)
             sigma_2 = Variable(torch.ones(self.embedding_dim), requires_grad=True)
 
-            kl_loss = torch.log(sigma_2/sigma) + ((sigma.pow(2) + (mu - mu_2).pow(2)) / (2*sigma_2.pow(2))) - 0.5
+            #kl_loss = torch.log(sigma_2/sigma) + ((sigma.pow(2) + (mu - mu_2).pow(2)) / (2*sigma_2.pow(2))) - 0.5
+            kl_loss = kl_div(mu, sigma, mu_2, sigma_2)
+            kl_sum += kl_loss
 
-            kl_sum += kl_loss.sum()
+        return z_i_all, mu_all, sigma_all, log_xi_sum, kl_sum
 
+    def get_alignments(self, x, y, neg_y, z_i_all):
         log_yi_sum = torch.zeros(1)
-
+        alignment = torch.zeros(y.size(0))
         a_j = 1 / x.size(0)
-        # for yy in np.arange(y.size(0)):
-        #     for cat_yi in cat_yi_all:
-        #         log_yi_sum += torch.log(a_j * cat_yi[yy])
-        for y_i in y:
-            for a_m in np.arange(0, x.size(0)):
-                log_yi_sum += a_j * self.approximate_softmax(y_i, neg_y, z_i_all[a_m], self.softmax_approx_y)
 
-        # single sample loss
+        for y_idx, y_i in enumerate(y):
+            max_am, max_am_idx = -1, -1
+            for a_m in range(0, x.size(0)):
+                p_j_z_a_j = self.approximate_softmax(y_i, neg_y, z_i_all[a_m], self.softmax_approx_y)
+                if max_am < p_j_z_a_j:
+                    max_am_idx = a_m
+                    max_am = p_j_z_a_j
+                log_yi_sum += a_j * p_j_z_a_j
+
+            alignment[y_idx] = max_am_idx
+        return alignment, log_yi_sum
+
+    def forward(self, x, y, neg_x, neg_y):
+        z_i_all, _, _, log_xi_sum, kl_sum = self.x_inference(x, neg_x)
+        alignment, log_yi_sum = self.get_alignments(x, y, neg_y, z_i_all)
         pos_loss = log_xi_sum + log_yi_sum - kl_sum
 
         return -1 * pos_loss
