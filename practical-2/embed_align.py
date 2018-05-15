@@ -144,8 +144,6 @@ class EmbedAlignModel(nn.Module):
 
             kl_sum += kl_loss.sum()
 
-
-
         log_yi_sum = torch.zeros(1)
 
         a_j = 1 / x.size(0)

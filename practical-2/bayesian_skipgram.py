@@ -73,6 +73,30 @@ class BayesianSkipgram(nn.Module):
             self.generative_sigma = self.generative_sigma.cuda()
             self.generative_affine = self.generative_affine.cuda()
 
+    def get_distribution(self, x, context_words):
+        context_words = context_words.view(1, -1)
+        context_size = context_words.size(1)
+
+        # Inference model
+        x_stacked = x.repeat(context_size, 1).transpose(0, 1)
+        center_embedding = self.inference_embedding(x_stacked)
+        context_embedding = self.inference_embedding(context_words)
+
+        emb = F.relu(self.inference_affine(torch.cat([center_embedding, context_embedding], -1)))
+        emb_sum = emb.sum(1)
+
+        inf_mu = self.inference_mean(emb_sum)
+        inf_sigma = F.softplus(self.inference_sigma(emb_sum))
+
+        # Sample
+        z = inf_mu + torch.mul(self.standard_normal.sample(), inf_sigma)
+
+        mu = self.generative_mean(x)
+        sigma = F.softplus(self.generative_sigma(x))
+
+        return mu, sigma, inf_mu, inf_sigma, z
+
+
     def forward(self, x_batch, context_words_batch):
 
         if self.use_cuda:
@@ -86,28 +110,9 @@ class BayesianSkipgram(nn.Module):
             total_loss = total_loss.cuda()
 
         for idx, (x, context_words) in enumerate(zip(x_batch, context_words_batch)):
-            context_words = context_words.view(1, -1)
-            context_size = context_words.size(1)
-
-            # Inference model
-            x_stacked = x.repeat(context_size, 1).transpose(0, 1)
-            center_embedding = self.inference_embedding(x_stacked)
-            context_embedding = self.inference_embedding(context_words)
-
-            emb = F.relu(self.inference_affine(torch.cat([center_embedding, context_embedding], -1)))
-            emb_sum = emb.sum(1)
-
-            inf_mu = self.inference_mean(emb_sum)
-            inf_sigma = F.softplus(self.inference_sigma(emb_sum))
-
-            # Sample
-            z = inf_mu + torch.mul(self.standard_normal.sample(), inf_sigma)
-
+            mu, sigma, inf_mu, inf_sigma, z = self.get_distribution(x, context_words)
             # Generative model
             logprobs = F.log_softmax(self.generative_affine(z), dim=-1).squeeze(0)
-
-            mu = self.generative_mean(x)
-            sigma = F.softplus(self.generative_sigma(x))
 
             # Loss
             loss_probs = torch.zeros_like(context_words).type(torch.FloatTensor)
@@ -122,6 +127,8 @@ class BayesianSkipgram(nn.Module):
             kl_loss = kl_loss.sum()
 
             loss = kl_loss - reconstruction_loss
+            if np.isnan(loss.item()):
+                print(kl_loss, reconstruction_loss, loss)
             total_loss[idx] = loss
 
         return total_loss.mean()
@@ -180,14 +187,17 @@ if __name__ == '__main__':
         "context_window" : 7,
         "n_epochs" : 3,
         "random_state" : 42,
-        "data_path" : "data/hansards/training.en",
+        "data_path" : "data/wa/test.en",
         "stop_words_file" : "data/en_stopwords.txt",
         "model_name" : "test_bn",
         "use_cuda" : False,
-        "batch_size": 128
+        "batch_size": 32
     }
     #################
     locals().update(params)
+
+    torch.manual_seed(random_state)
+    np.random.seed(random_state)
 
     stop_words = None
     if stop_words_file:
@@ -201,7 +211,7 @@ if __name__ == '__main__':
     bsm = BayesianSkipgram(vocab, z_embedding_dim, use_cuda)
 
     # set up model parameters to learn
-    optimizer = optim.Adam(bsm.parameters())
+    optimizer = optim.Adam(bsm.parameters(), lr=1e-4)
 
     epoch_losses = []
     tictoc = utils.TicToc()
@@ -229,7 +239,7 @@ if __name__ == '__main__':
 
         epoch_losses.append(epoch_loss.mean())
         tictoc.tic("Epoch complete: Mean loss: {}".format(epoch_loss.mean()))
-100
+
     bsm.save_model("./models", model_name, epoch_losses, params)
 
     del bsm
