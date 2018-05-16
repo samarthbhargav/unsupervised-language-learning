@@ -67,7 +67,7 @@ if __name__ == '__main__':
                 # TODO print something out and track
                 continue
             vec = torch.LongTensor(np.array([vocab[gold_candidate]]))
-            context_vec = torch.LongTensor(context_vec)
+
             if model.use_cuda:
                 center_vec = center_vec.cuda()
 
