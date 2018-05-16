@@ -31,7 +31,7 @@ if __name__ == '__main__':
     scores_mu = collections.defaultdict(list)
     scores_kl_post = collections.defaultdict(list)
     scores_kl_prior = collections.defaultdict(list)
-        
+
     for lst_item in lst:
         # first compute target distributions
         center_word = lst_item.target_word
@@ -52,8 +52,14 @@ if __name__ == '__main__':
         for i, context_word in enumerate(context_words):
             context_vec[i] = vocab[context_word]
 
+
         center_vec = torch.LongTensor(np.array([vocab[center_word]]))
-        mu, sigma, inf_mu, inf_sigma, z = model.get_distribution(center_vec, torch.LongTensor(context_vec))
+        context_vec = torch.LongTensor(context_vec)
+        if model.use_cuda:
+            center_vec = center_vec.cuda()
+            context_vec = context_vec.cuda()
+
+        mu, sigma, inf_mu, inf_sigma, z = model.get_distribution(center_vec, context_vec)
 
         #print(mu, sigma, inf_mu, inf_sigma, z)
         for gold_candidate in gold_dict[lst_item.target_word]:
@@ -61,7 +67,11 @@ if __name__ == '__main__':
                 # TODO print something out and track
                 continue
             vec = torch.LongTensor(np.array([vocab[gold_candidate]]))
-            mu_s, sigma_s, inf_mu_s, inf_sigma_s, z_s = model.get_distribution(vec, torch.LongTensor(context_vec))
+            context_vec = torch.LongTensor(context_vec)
+            if model.use_cuda:
+                center_vec = center_vec.cuda()
+
+            mu_s, sigma_s, inf_mu_s, inf_sigma_s, z_s = model.get_distribution(vec, context_vec)
             score_mu = cosine_similarity(mu.squeeze().detach().cpu().numpy(), mu_s.squeeze().detach().cpu().numpy())
             scores_mu[lst_item.complete_word, lst_item.sentence_id].append((gold_candidate, score_mu))
 
