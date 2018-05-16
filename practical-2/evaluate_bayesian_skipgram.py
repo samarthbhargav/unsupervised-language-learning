@@ -12,7 +12,7 @@ from similarity import cosine_similarity
 from bayesian_skipgram import BayesianSkipgram
 
 if __name__ == '__main__':
-    model_name = "test_bn"
+    model_name = "bsg_small_en"
     model_root = "./models"
     test_file = "./data/lst/lst_test.preprocessed"
     gold_file = "./data/lst/lst.gold.candidates"
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     scores_mu = collections.defaultdict(list)
     scores_kl_post = collections.defaultdict(list)
     scores_kl_prior = collections.defaultdict(list)
-
+        
     for lst_item in lst:
         # first compute target distributions
         center_word = lst_item.target_word

@@ -39,7 +39,7 @@ class BayesianSkipgram(nn.Module):
         return (model, loss, params)
 
 
-    def __init__(self, vocab, embedding_dim, use_cuda=False):
+    def __init__(self, vocab, embedding_dim, use_cuda=True):
         super(BayesianSkipgram, self).__init__()
         self.vocab = vocab
         self.embedding_dim = embedding_dim
@@ -192,7 +192,7 @@ if __name__ == '__main__':
         "data_path" : "data/wa/test.en",
         "stop_words_file" : "data/en_stopwords.txt",
         "model_name" : "test_bn",
-        "use_cuda" : False,
+        "use_cuda" : True,
         "batch_size": 32
     }
     #################
