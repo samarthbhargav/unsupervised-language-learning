@@ -189,7 +189,7 @@ if __name__ == '__main__':
         "context_window" : 7,
         "n_epochs" : 3,
         "random_state" : 42,
-        "data_path" : "data/wa/test.en",
+        "data_path" : "data/hansards/small_training.en",
         "stop_words_file" : "data/en_stopwords.txt",
         "model_name" : "test_bn",
         "use_cuda" : True,
