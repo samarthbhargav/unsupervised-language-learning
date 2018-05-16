@@ -129,7 +129,7 @@ class EmbedAlignModel(nn.Module):
 
             sigma = F.relu(self.sigma_affine_1(hidden_sum))
             sigma = F.softplus(self.sigma_affine_2(sigma))
-            sigma_all[idx] = mu
+            sigma_all[idx] = sigma
 
             z_i = mu + torch.mul(self.standard_normal.sample().detach(), sigma).squeeze()
             z_i_all[idx] = z_i
