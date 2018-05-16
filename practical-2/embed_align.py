@@ -37,7 +37,7 @@ class EmbedAlignModel(nn.Module):
         vocab_x = utils.load_object(os.path.join(path, model_name + "_vocab_x"))
         vocab_y = utils.load_object(os.path.join(path, model_name + "_vocab_y"))
 
-        model = EmbedAlignModel(vocab_x, vocab_y, params["embedding_dim"])
+        model = EmbedAlignModel(vocab_x, vocab_y, params["embedding_dim"], params["use_cuda"])
         model.load_state_dict(torch.load(os.path.join(path, model_name)))
         return (model, loss, params)
 
@@ -52,10 +52,11 @@ class EmbedAlignModel(nn.Module):
 
 
 
-    def __init__(self, vocab_x, vocab_y, embedding_dim, random_state=None):
+    def __init__(self, vocab_x, vocab_y, embedding_dim, random_state=None, use_cuda=True):
         super(EmbedAlignModel, self).__init__()
         self.vocab_x = vocab_x
         self.vocab_y = vocab_y
+        self.use_cuda = use_cuda
 
         if random_state:
             torch.manual_seed(random_state)
@@ -77,6 +78,9 @@ class EmbedAlignModel(nn.Module):
         std_mean = torch.zeros(self.embedding_dim)
         std_cov = torch.diag(torch.ones(self.embedding_dim))
 
+        if use_cuda:
+            std_mean = std_mean.cuda()
+            std_cov = std_cov.cuda()
         self.standard_normal = distb.MultivariateNormal(std_mean, std_cov)
 
         # generative
@@ -198,9 +202,10 @@ if __name__ == '__main__':
         "random_state" : 42,
         "en_data_path" : "data/hansards/small_training.en",
         "fr_data_path" : "data/hansards/small_training.fr",
-        "model_name": "embed_align_small",
+        "model_name": "eam_small",
         "en_stop_words_path" : None,
         "fr_stop_words_path" : None,
+        "use_cuda" : True,
         "n_negative": 100
     }
     #################
@@ -219,8 +224,7 @@ if __name__ == '__main__':
     en_vocab = Vocabulary(en_sentences, max_size = vocab_x)
     fr_vocab = Vocabulary(fr_sentences, max_size = vocab_y)
 
-    eam = EmbedAlignModel(en_vocab, fr_vocab, embedding_dim,
-                            random_state = random_state)
+    eam = EmbedAlignModel(en_vocab, fr_vocab, embedding_dim, random_state = random_state, use_cuda = use_cuda)
 
     optimizer = optim.Adam(eam.parameters())
 
@@ -245,7 +249,11 @@ if __name__ == '__main__':
             loss = eam(en_matrix, fr_matrix, torch.LongTensor(neg_samples_en), torch.LongTensor(neg_samples_fr))
             loss.backward()
             optimizer.step()
-            epoch_loss.add(loss.item())
+
+            if use_cuda:
+                epoch_loss.add(loss.cpu().item())
+            else:
+                epoch_loss.add(loss.item())
 
         epoch_losses.append(epoch_loss.mean())
         tictoc.tic("Epoch complete: Mean loss: {}".format(epoch_loss.mean()))
