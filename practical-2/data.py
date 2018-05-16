@@ -1,4 +1,5 @@
 import os
+import string
 import codecs
 import random
 import collections
@@ -6,9 +7,11 @@ import math
 
 import numpy as np
 
-def read_stop_words(file_name):
+
+def read_stop_words(file_name, punctuation=True):
     with codecs.open(file_name, "r", "utf-8") as reader:
-        return [line.strip() for line in reader]
+        stop_words = [line.strip() for line in reader]
+    return stop_words.extend(list(string.punctuation))
 
 class SentenceIterator:
 
@@ -25,18 +28,20 @@ class SentenceIterator:
                 if len(line) < self.min_length or len(line) > self.max_length:
                     continue
                 line = [word.lower() for word in line]
-                # remove stop_words
                 if self.stop_words:
                     line = [word for word in line if word not in self.stop_words]
                 yield line
 
-def get_context_words(sentence, index, context_window):
+def get_context_words(sentence, index, context_window, pad=False):
     n_ = context_window // 2
-    context = set()
+    context = list()
     for i in range(index - n_, index + n_ + 1):
         if i == index or i < 0 or i >= len(sentence):
             continue
-        context.add(sentence[i])
+        context.append(sentence[i])
+    if pad :
+        while len(context) < (context_window-1):
+            context.append("$PAD$")
     return context
 
 
@@ -46,7 +51,7 @@ class Vocabulary:
     # TODO remove stop words
     def __init__(self, sentences, max_size = 10000, special_tokens = None):
         if special_tokens is None:
-            special_tokens = {"$UNK$", "$EOS$", "$SOS$", "$PAD"}
+            special_tokens = {"$UNK$", "$EOS$", "$SOS$", "$PAD$"}
         self.index  = {}
 
         self.ust = UnigramSamplingTable()
@@ -86,6 +91,14 @@ class Vocabulary:
     def word(self, index):
         return self.inverse_index[index]
 
+    def process(self, sentence):
+        output = []
+        for word in sentence:
+            if word not in self.index:
+                word = "$UNK$"
+            output.append(word)
+        return output
+
     def __getitem__(self, item):
         if item not in self.index:
             raise ValueError(" '{}' not present in the vocabulary".format(item))
@@ -114,13 +127,10 @@ class UnigramSamplingTable:
 
     def remove_word(self, word, sample=0.001):
         z_wi = self.freq[word]/self.num_tokens
+        if z_wi == 0:
+            return False
         prob = ((math.sqrt(z_wi / sample) + 1)) * ((sample)/z_wi)
         return prob < random.random()
 
 if __name__ == '__main__':
-    sentences = SentenceIterator("data/hansards/training.en")
-    v = Vocabulary(sentences)
-    remove = [v.ust.remove_word("the") for _ in range(100)]
-    print(remove)
-    neg = v.ust.sample()
-    print(neg)
+    print(get_context_words("This is a sentence".split(), 3, 5, True))
