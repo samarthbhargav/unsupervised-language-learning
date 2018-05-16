@@ -37,7 +37,8 @@ class EmbedAlignModel(nn.Module):
         vocab_x = utils.load_object(os.path.join(path, model_name + "_vocab_x"))
         vocab_y = utils.load_object(os.path.join(path, model_name + "_vocab_y"))
 
-        model = EmbedAlignModel(vocab_x, vocab_y, params["embedding_dim"], params["use_cuda"])
+        model = EmbedAlignModel(vocab_x, vocab_y, params["embedding_dim"],
+                random_state=params["random_state"], use_cuda=params["use_cuda"])
         model.load_state_dict(torch.load(os.path.join(path, model_name)))
         return (model, loss, params)
 
@@ -75,15 +76,6 @@ class EmbedAlignModel(nn.Module):
         self.sigma_affine_1 = nn.Linear(self.embedding_dim, self.embedding_dim)
         self.sigma_affine_2 = nn.Linear(self.embedding_dim, self.embedding_dim)
 
-        std_mean = torch.zeros(self.embedding_dim)
-        std_cov = torch.diag(torch.ones(self.embedding_dim))
-
-        if use_cuda:
-            std_mean = std_mean.cuda()
-            std_cov = std_cov.cuda()
-        self.standard_normal = distb.MultivariateNormal(std_mean, std_cov)
-
-        # generative
         self.x_affine_1 = nn.Linear(self.embedding_dim, self.embedding_dim)
         self.x_affine_2 = nn.Linear(self.embedding_dim, self.vocab_x.N)
 
@@ -95,6 +87,32 @@ class EmbedAlignModel(nn.Module):
         self.softmax_approx_x = nn.Embedding(self.vocab_x.N, self.embedding_dim)
         self.softmax_approx_y = nn.Embedding(self.vocab_y.N, self.embedding_dim)
 
+        std_mean = torch.zeros(self.embedding_dim)
+        std_cov = torch.diag(torch.ones(self.embedding_dim))
+        if use_cuda:
+            std_mean = std_mean.cuda()
+            std_cov = std_cov.cuda()
+
+            self.internal_embedding = self.internal_embedding.cuda()
+            self.lstm = self.lstm.cuda()
+            self.mu_affine_1 = self.mu_affine_1.cuda()
+            self.mu_affine_2 = self.mu_affine_2.cuda()
+
+            self.sigma_affine_1 = self.sigma_affine_1.cuda()
+            self.sigma_affine_2 = self.sigma_affine_2.cuda()
+
+            self.x_affine_1 = self.x_affine_1.cuda()
+            self.x_affine_2 = self.x_affine_2.cuda()
+
+            self.y_affine_1 = self.y_affine_1.cuda()
+            self.y_affine_2 = self.y_affine_2.cuda()
+
+            self.softmax_approx_x = self.softmax_approx_x.cuda()
+            self.softmax_approx_y = self.softmax_approx_y.cuda()
+
+
+        self.standard_normal = distb.MultivariateNormal(std_mean, std_cov)
+
 
     def approximate_softmax(self, x, x_neg, z, approx_embed):
         numerator = torch.exp(torch.matmul(z, approx_embed(x)))
@@ -103,12 +121,18 @@ class EmbedAlignModel(nn.Module):
         return numerator / (numerator + denominator.sum())
 
     def x_inference(self, x, neg_x):
+        if self.use_cuda:
+            x = x.cuda()
+            neg_x = neg_x.cuda()
+
         x_embed = self.internal_embedding(x)
         neg_x_embed = self.internal_embedding(neg_x)
         hidden_op = torch.zeros(x_embed.size(0), self.embedding_dim)
-
         hidden_state = (torch.randn(2, 1, self.embedding_dim),
                     torch.randn(2, 1, self.embedding_dim))
+        if self.use_cuda:
+            hidden_op.cuda()
+            hidden_state = (hidden_state[0].cuda(), hidden_state[1].cuda())
 
         log_xi_sum = torch.zeros(1)
         kl_sum = torch.zeros(1)
@@ -116,6 +140,15 @@ class EmbedAlignModel(nn.Module):
         z_i_all = torch.zeros(x.size(0), self.embedding_dim)
         mu_all = torch.zeros(x.size(0), self.embedding_dim)
         sigma_all = torch.zeros(x.size(0), self.embedding_dim)
+
+        if self.use_cuda:
+            log_xi_sum = log_xi_sum.cuda()
+            kl_sum = kl_sum.cuda()
+
+            z_i_all = z_i_all.cuda()
+            mu_all = mu_all.cuda()
+            sigma_all = sigma_all.cuda()
+
 
         for idx, (i, x_i) in enumerate(zip(x_embed, x)):
 
@@ -138,8 +171,10 @@ class EmbedAlignModel(nn.Module):
 
             mu_2 = Variable(torch.zeros(self.embedding_dim), requires_grad=True)
             sigma_2 = Variable(torch.ones(self.embedding_dim), requires_grad=True)
+            if self.use_cuda:
+                mu_2 = mu_2.cuda()
+                sigma_2 = sigma_2.cuda()
 
-            #kl_loss = torch.log(sigma_2/sigma) + ((sigma.pow(2) + (mu - mu_2).pow(2)) / (2*sigma_2.pow(2))) - 0.5
             kl_loss = kl_div(mu, sigma, mu_2, sigma_2)
             kl_sum += kl_loss
 
@@ -149,6 +184,10 @@ class EmbedAlignModel(nn.Module):
         log_yi_sum = torch.zeros(1)
         alignment = torch.zeros(y.size(0))
         a_j = 1 / x.size(0)
+
+        if self.use_cuda:
+            log_yi_sum = log_yi_sum.cuda()
+            alignment = alignment.cuda()
 
         for y_idx, y_i in enumerate(y):
             max_am, max_am_idx = -1, -1
@@ -198,14 +237,14 @@ if __name__ == '__main__':
         "embedding_dim" : 200,
         "vocab_x": 10000,
         "vocab_y": 10000,
-        "n_epochs": 3,
+        "n_epochs": 1,
         "random_state" : 42,
-        "en_data_path" : "data/hansards/small_training.en",
-        "fr_data_path" : "data/hansards/small_training.fr",
+        "en_data_path" : "data/wa/dev.en",
+        "fr_data_path" : "data/wa/test.fr",
         "model_name": "eam_small",
         "en_stop_words_path" : None,
         "fr_stop_words_path" : None,
-        "use_cuda" : True,
+        "use_cuda" : False,
         "n_negative": 100
     }
     #################
