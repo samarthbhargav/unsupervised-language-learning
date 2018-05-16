@@ -47,7 +47,7 @@ def create_naacl_alignments(model, en_sentences, fr_sentences, n_negative, naacl
 
 
 if __name__ == '__main__':
-    model_name = "test_ea"
+    model_name = "eam_dev"
     model_root = "./models"
 
     print("Loading: ", model_name)

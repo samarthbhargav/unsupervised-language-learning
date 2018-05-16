@@ -181,6 +181,10 @@ class EmbedAlignModel(nn.Module):
         return z_i_all, mu_all, sigma_all, log_xi_sum, kl_sum
 
     def get_alignments(self, x, y, neg_y, z_i_all):
+        if self.use_cuda:
+            y = y.cuda()
+            neg_y = neg_y.cuda()
+
         log_yi_sum = torch.zeros(1)
         alignment = torch.zeros(y.size(0))
         a_j = 1 / x.size(0)
@@ -239,13 +243,14 @@ if __name__ == '__main__':
         "vocab_y": 10000,
         "n_epochs": 1,
         "random_state" : 42,
-        "en_data_path" : "data/wa/dev.en",
-        "fr_data_path" : "data/wa/test.fr",
-        "model_name": "eam_small",
+        "en_data_path" : "data/hansards/small_training.en",
+        "fr_data_path" : "data/hansards/small_training.fr",
+        "model_name": "eam_hansards_small",
         "en_stop_words_path" : None,
         "fr_stop_words_path" : None,
-        "use_cuda" : False,
-        "n_negative": 100
+        "use_cuda" : True,
+        "n_negative": 100,
+        "stopping_loss": 1e-3
     }
     #################
 
@@ -293,6 +298,10 @@ if __name__ == '__main__':
                 epoch_loss.add(loss.cpu().item())
             else:
                 epoch_loss.add(loss.item())
+
+            if sentence_num > 1000 and epoch_loss.mean() < stopping_loss:
+                print("Loss is less than stopping criterion, breaking training loop: {}".format(epoch_loss.mean()))
+                break
 
         epoch_losses.append(epoch_loss.mean())
         tictoc.tic("Epoch complete: Mean loss: {}".format(epoch_loss.mean()))

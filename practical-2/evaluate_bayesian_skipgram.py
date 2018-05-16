@@ -69,7 +69,7 @@ if __name__ == '__main__':
             vec = torch.LongTensor(np.array([vocab[gold_candidate]]))
 
             if model.use_cuda:
-                center_vec = center_vec.cuda()
+                vec = center_vec.cuda()
 
             mu_s, sigma_s, inf_mu_s, inf_sigma_s, z_s = model.get_distribution(vec, context_vec)
             score_mu = cosine_similarity(mu.squeeze().detach().cpu().numpy(), mu_s.squeeze().detach().cpu().numpy())
