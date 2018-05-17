@@ -241,16 +241,16 @@ if __name__ == '__main__':
         "embedding_dim" : 200,
         "vocab_x": 10000,
         "vocab_y": 10000,
-        "n_epochs": 1,
+        "n_epochs": 3,
         "random_state" : 42,
         "en_data_path" : "data/hansards/small_training.en",
         "fr_data_path" : "data/hansards/small_training.fr",
         "model_name": "eam_hansards_small",
         "en_stop_words_path" : None,
         "fr_stop_words_path" : None,
-        "use_cuda" : True,
+        "use_cuda" : False,
         "n_negative": 100,
-        "stopping_loss": 1e-3
+        "stopping_loss": 1
     }
     #################
 

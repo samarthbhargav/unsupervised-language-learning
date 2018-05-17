@@ -47,7 +47,7 @@ def create_naacl_alignments(model, en_sentences, fr_sentences, n_negative, naacl
 
 
 if __name__ == '__main__':
-    model_name = "eam_dev"
+    model_name = "eam_hansards_small"
     model_root = "./models"
 
     print("Loading: ", model_name)
@@ -61,7 +61,7 @@ if __name__ == '__main__':
         alignment_y_file = alignment_file + ".fr"
         en_sentences = SentenceIterator(alignment_x_file, stop_words=params["en_stop_words_path"])
         fr_sentences = SentenceIterator(alignment_y_file, stop_words=params["fr_stop_words_path"])
-        #create_naacl_alignments(model, en_sentences, fr_sentences, params["n_negative"], alignment_file.split("/")[-1] + ".naacl")
+        create_naacl_alignments(model, en_sentences, fr_sentences, params["n_negative"], alignment_file.split("/")[-1] + ".naacl")
 
     print("Evaluation:: LST")
 
