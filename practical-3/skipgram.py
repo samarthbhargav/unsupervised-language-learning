@@ -31,10 +31,10 @@ EUROPARL_DATA = "../practical-2/data/wa/dev.en"
 
 def get_skipgram(location):
     if os.path.exists(location):
-        print("Model already exists, loading it!")
+        logging.info("Model already exists, loading it!")
         model = Word2Vec.load(location)
     else:
-        print("Creating the model")
+        logging.info("Creating the model")
         model = Word2Vec(data.SentenceIterator(EUROPARL_DATA),
                          size=100, # TODO
                          window=5, # TODO
@@ -45,7 +45,7 @@ def get_skipgram(location):
                          workers=1,
                          iter=10 # TODO
                         )
-        print("Done, saving it to {}".format(location))
+        logging.info("Done, saving it to {}".format(location))
         model.save(location)
     return model
 
