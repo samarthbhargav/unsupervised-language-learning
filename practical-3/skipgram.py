@@ -36,14 +36,14 @@ def get_skipgram(location):
     else:
         logging.info("Creating the model")
         model = Word2Vec(data.SentenceIterator(EUROPARL_DATA),
-                         size=100, # TODO
+                         size=300, # TODO
                          window=5, # TODO
                          sg=1, # We want to use Skipgram
-                         max_vocab_size=10000, # TODO
-                         negative = 5, # TODO Negative Sampling size
+                         max_vocab_size=100000, # TODO
+                         negative = 10, # TODO Negative Sampling size
                          compute_loss=True, #
-                         workers=1,
-                         iter=10 # TODO
+                         workers=4,
+                         iter=3 # TODO
                         )
         logging.info("Done, saving it to {}".format(location))
         model.save(location)

@@ -20,18 +20,22 @@ import senteval
 from skipgram import SkipgramSentEval
 from ea_sent_eval import EmbedAlignSentEval
 
-# TODO: Fix "ImageCaptionRetrieval"
-TASKS = [ "STS12", "STS13",
-            "STS14", "STS15", "STS16", "CR", "MR", "MPQA", "SUBJ",
-            "SST2", "SST5", "TREC", "MRPC", "SICKEntailment"]
+logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
 CUDA_TASKS = ["SNLI", "STSBenchmark", "SICKRelatedness"]
 
 if torch.cuda.is_available():
     logging.info("CUDA is available, evaluation on {} is enabled".format(CUDA_TASKS))
-    TASKS.extend(CUDA_TASKS)
+    TASKS = CUDA_TASKS[:]
 else:
+    TASKS = []
     logging.info("CUDA is not available, evaluation on {} is disabled".format(CUDA_TASKS))
+
+
+# TODO: Fix "ImageCaptionRetrieval"
+TASKS.extend(["STS12", "STS13",
+            "STS14", "STS15", "STS16", "CR", "MR", "MPQA", "SUBJ",
+            "SST2", "SST5", "TREC", "MRPC", "SICKEntailment"])
 
 
 #TASKS = ['CR', 'MR']
@@ -40,8 +44,6 @@ else:
 PROBING_TASKS = ['Length', 'WordContent', 'Depth', 'TopConstituents',
 'BigramShift', 'Tense', 'SubjNumber', 'ObjNumber',
 'OddManOut', 'CoordinationInversion']
-
-logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
 
 def get_params(args):
