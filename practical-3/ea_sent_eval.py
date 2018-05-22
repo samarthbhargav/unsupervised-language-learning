@@ -5,11 +5,8 @@ from collections import defaultdict
 import dill
 import dgm4nlp
 
-class dotdict(dict):
-    """ dot.notation access to dictionary attributes """
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
+
+import numpy as np
 
 class EmbeddingExtractor:
     """
@@ -65,10 +62,11 @@ class EmbeddingExtractor:
 
 class EmbedAlignSentEval(SentEvalApi):
 
-    def __init__(self, ckpt_path, tok_path):
-        super().__init__(self, "embed_align")
+    def __init__(self, ckpt_path, tok_path, composition_method):
+        super().__init__("embed_align")
         self.ckpt_path = ckpt_path
         self.tok_path = tok_path
+        self.composition_method = composition_method
 
     def prepare(self, params, samples):
         """
@@ -82,7 +80,8 @@ class EmbedAlignSentEval(SentEvalApi):
         )
 
         # load tokenizer from training
-        params.tks1 = dill.load(open(params.tok_path, 'rb'))
+        params.tks1 = dill.load(open(self.tok_path, 'rb'))
+        params.composition_method = self.composition_method
         return
 
     def batcher(self, params, batch):
