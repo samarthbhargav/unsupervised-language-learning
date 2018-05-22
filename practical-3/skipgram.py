@@ -26,7 +26,9 @@ import senteval
 
 from api import SentEvalApi
 
-EUROPARL_DATA = "../practical-2/data/wa/dev.en"
+
+logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
+EUROPARL_DATA = "../practical-2/data/hansards/training.en"
 
 
 def get_skipgram(location):
@@ -36,14 +38,15 @@ def get_skipgram(location):
     else:
         logging.info("Creating the model")
         model = Word2Vec(data.SentenceIterator(EUROPARL_DATA),
-                         size=300, # TODO
-                         window=5, # TODO
+                         min_count=0,
+                         size=300,
+                         window=5,
+                         sample=0.001,
                          sg=1, # We want to use Skipgram
-                         max_vocab_size=100000, # TODO
-                         negative = 10, # TODO Negative Sampling size
-                         compute_loss=True, #
+                         negative = 20,
+                         compute_loss=True,
                          workers=4,
-                         iter=3 # TODO
+                         iter=10
                         )
         logging.info("Done, saving it to {}".format(location))
         model.save(location)
