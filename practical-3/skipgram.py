@@ -25,10 +25,10 @@ import senteval
 
 
 from api import SentEvalApi
-
+from compose import compose
 
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
-EUROPARL_DATA = "../practical-2/data/hansards/training.en"
+EUROPARL_DATA = "../practical-2/data/europarl/training.en"
 
 
 def get_skipgram(location):
@@ -46,7 +46,7 @@ def get_skipgram(location):
                          negative = 20,
                          compute_loss=True,
                          workers=4,
-                         iter=10
+                         iter=3
                         )
         logging.info("Done, saving it to {}".format(location))
         model.save(location)
@@ -80,7 +80,8 @@ class SkipgramSentEval(SentEvalApi):
             if not sentvec:
                 vec = np.zeros(params.skipgram.vector_size)
                 sentvec.append(vec)
-            sentvec = np.mean(sentvec, 0)
+            #sentvec = np.mean(sentvec, 0)
+            sentvec = compose(sentvec, params.composition_method)
             embeddings.append(sentvec)
         embeddings = np.vstack(embeddings)
         return embeddings

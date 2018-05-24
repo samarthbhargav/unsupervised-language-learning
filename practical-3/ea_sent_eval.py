@@ -1,12 +1,15 @@
-from api import SentEvalApi
-
-import tensorflow as tf
+import logging
 from collections import defaultdict
+
 import dill
 import dgm4nlp
-
-
 import numpy as np
+import tensorflow as tf
+
+from api import SentEvalApi
+from compose import compose
+
+
 
 class EmbeddingExtractor:
     """
@@ -82,7 +85,6 @@ class EmbedAlignSentEval(SentEvalApi):
         # load tokenizer from training
         params.tks1 = dill.load(open(self.tok_path, 'rb'))
         params.composition_method = self.composition_method
-        return
 
     def batcher(self, params, batch):
         """
@@ -103,17 +105,17 @@ class EmbedAlignSentEval(SentEvalApi):
         batch = [sent if sent != [] else ['.'] for sent in batch]
         embeddings = []
         for sent in batch:
+
             # Here is where dgm4nlp converts strings to unique ids respecting the vocabulary
             # of the pre-trained EmbedAlign model
             # from tokens ot ids position 0 is en
             x1 = params.tks1[0].to_sequences([(' '.join(sent))])
-
             # extract word embeddings in context for a sentence
             # [1, sentence_length, z_dim]
             z_batch1 = params.extractor.get_z_embedding_batch(x_batch=x1)
             # sentence vector is the mean of word embeddings in context
             # [1, z_dim]
-            sent_vec = np.mean(z_batch1, axis=1)
+            sent_vec = compose(z_batch1.squeeze(0), params.composition_method)
             # check if there is any NaN in vector (they appear sometimes when there's padding)
             if np.isnan(sent_vec.sum()):
                 sent_vec = np.nan_to_num(sent_vec)
@@ -122,3 +124,16 @@ class EmbedAlignSentEval(SentEvalApi):
             return None
         embeddings = np.vstack(embeddings)
         return embeddings
+
+
+if __name__ == '__main__':
+    import os
+    from argparse import Namespace
+    params = Namespace(extractor=None, tks1=None, composition_method=None)
+    logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
+    ckpt_path = os.path.join("models/ull-practical3-embedalign", "model.best.validation.aer.ckpt")
+    tok_path = os.path.join("models/ull-practical3-embedalign", "tokenizer.pickle")
+    embed_align = EmbedAlignSentEval(ckpt_path, tok_path, "avg")
+
+    embed_align.prepare(params, None)
+    embed_align.batcher(params, [["i like turtles"]])
