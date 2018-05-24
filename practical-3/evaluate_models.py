@@ -37,6 +37,7 @@ TASKS.extend(["STS12", "STS13",
             "STS14", "STS15", "STS16", "CR", "MR", "MPQA", "SUBJ",
             "SST2", "SST5", "TREC", "MRPC", "SICKEntailment"])
 
+TASKS = ['MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'TREC', 'MRPC', 'SICKEntailment', 'STS14']
 
 #TASKS = ['CR', 'MR']
 
@@ -49,7 +50,7 @@ PROBING_TASKS = ['Length', 'WordContent', 'Depth', 'TopConstituents',
 def get_params(args):
     # TODO fix this to prod
     # Don't forget pls
-    params = {'task_path': args.data_path, 'usepytorch': torch.cuda.is_available(), 'kfold':args.k_fold}
+    params = {'task_path': args.data_path, 'usepytorch': torch.cuda.is_available(), 'kfold':args.k_fold, "seed": 42}
     params['classifier'] = {'nhid': 0, 'optim': 'rmsprop', 'batch_size': 128,
                                  'tenacity': 3, 'epoch_size': 2}
 
@@ -60,6 +61,9 @@ def evaluate_model(model, args):
     se = senteval.engine.SE(get_params(args), model.batcher, model.prepare)
 
     results = se.eval(TASKS)
+
+    if not os.path.exists(args.results_folder):
+        os.mkdir(args.results_folder)
 
     with open(os.path.join(args.results_folder, model.get_name() + ".pkl"), "wb") as handle:
         pkl.dump(results, handle)
