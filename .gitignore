@@ -4,6 +4,7 @@ bin
 include
 lib
 pip-selfcheck.json
+practical-2
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -31,6 +32,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.deb
+*.tgz
+
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
