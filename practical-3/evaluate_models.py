@@ -48,11 +48,9 @@ PROBING_TASKS = ['Length', 'WordContent', 'Depth', 'TopConstituents',
 
 
 def get_params(args):
-    # TODO fix this to prod
-    # Don't forget pls
-    params = {'task_path': args.data_path, 'usepytorch': torch.cuda.is_available(), 'kfold':args.k_fold, "seed": 42}
-    params['classifier'] = {'nhid': 0, 'optim': 'rmsprop', 'batch_size': 128,
-                                 'tenacity': 3, 'epoch_size': 2}
+    params = {'task_path': args.data_path, 'usepytorch': torch.cuda.is_available(), 'kfold': args.k_fold, "seed": 42}
+    params['classifier'] = {'nhid': 0, 'optim': 'adam', 'batch_size': 64,
+                                 'tenacity': 5, 'epoch_size': 4}
 
     logging.info("********** Params: {} ********".format(params))
     return params
