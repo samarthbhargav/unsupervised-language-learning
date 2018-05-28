@@ -22,8 +22,7 @@ from ea_sent_eval import EmbedAlignSentEval
 
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
-# CUDA_TASKS = ["SNLI", "STSBenchmark", "SICKRelatedness"]
-CUDA_TASKS = []
+CUDA_TASKS = ["SNLI", "STSBenchmark", "SICKRelatedness"]
 
 if torch.cuda.is_available():
     logging.info("CUDA is available, evaluation on {} is enabled".format(CUDA_TASKS))
@@ -34,11 +33,11 @@ else:
 
 
 # TODO: Fix "ImageCaptionRetrieval"
-# TASKS.extend(["STS12", "STS13",
-            # "STS14", "STS15", "STS16", "CR", "MR", "MPQA", "SUBJ",
-            # "SST2", "SST5", "TREC", "MRPC", "SICKEntailment"])
+TASKS.extend(["STS12", "STS13",
+            "STS14", "STS15", "STS16", "CR", "MR", "MPQA", "SUBJ",
+            "SST2", "SST5", "TREC", "MRPC", "SICKEntailment"])
 
-TASKS.extend(['MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'TREC', 'MRPC', 'SICKEntailment', 'STS14'])
+TASKS = ['MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'TREC', 'MRPC', 'SICKEntailment', 'STS14']
 
 #TASKS = ['CR', 'MR']
 
@@ -50,8 +49,8 @@ PROBING_TASKS = ['Length', 'WordContent', 'Depth', 'TopConstituents',
 
 def get_params(args):
     params = {'task_path': args.data_path, 'usepytorch': torch.cuda.is_available(), 'kfold': args.k_fold, "seed": 42}
-    params['classifier'] = {'nhid': 0, 'optim': 'adam', 'batch_size': 128,
-                                 'tenacity': 3, 'epoch_size': 3}
+    params['classifier'] = {'nhid': 0, 'optim': 'adam', 'batch_size': 64,
+                                 'tenacity': 5, 'epoch_size': 4}
 
     logging.info("********** Params: {} ********".format(params))
     return params
