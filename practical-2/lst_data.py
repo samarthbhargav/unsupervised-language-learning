@@ -1,31 +1,47 @@
-# TODO: need to remove stop words and numbers and punctuations from the
-# tokenized sentences
+#  Base, assigning scores according to the Cosine
+# similarity between the target and the substitute word
+# embeddings, ignoring the context.
+# GOLD: scrap.n::discarded item;album;clipping;piece;crumb;fragment;recycling;morsel;collage;shred;odds and ends;rubbish;
 
 import os
+import re
+import string
 import codecs
 
 class LstIterator:
-    def __init__(self, filename):
+    def __init__(self, filename, category):
         self.filename = filename
+        self.category = category
 
     def __iter__(self):
         with codecs.open(self.filename, 'r') as f:
             for line in f:
-                line = line.split()
-                yield LstItem(line)
+                if self.category=="test":
+                    line = line.split()
+                    yield LstItem(line)
+                else:
+                    line = re.split('::|, |\;|, |\n', line)
+                    yield GoldSubstitutes(line)
 
 class LstItem:
     def __init__(self, sentence):
         self.target_word = sentence[0].split(".")[0]
-        self.target_postag = sentence[0].split(".")[1]
+        self.complete_word = sentence[0]
         self.sentence_id = sentence[1]
-        self.target_position = sentence[2]
+        self.target_pos = int(sentence[2])
         self.tokenized_sentence = sentence[3:]
 
+class GoldSubstitutes:
+    def __init__(self, sentence):
+        self.target_word = sentence[0].split(".")[0]
+        self.complete_word = sentence[0]
+        self.substitutes = sentence[1:-1]
+        self.full_sentence = sentence
 
-# if __name__=='__main__':
-#     file = LstIterator('data/lst/lst_test.preprocessed')
-#     empty = {}
-#     for s in file:
-#         print(most_similar(s.target_word, ))
+
+# if __name__ == "__main__":
+#     gold = LstIterator("data/lst/lst.gold.candidates", category="substitute")
+#
+#     for l in gold:
+#         print(l.substitutes)
 #         break

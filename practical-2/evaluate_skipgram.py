@@ -1,34 +1,61 @@
 import utils
+import gensim
 
-from similarity import WordSimilarityModel
-from lst_data import LstIterator, LstItem
+from similarity import cosine_similarity, WordSimilarityModel
+from lst_data import LstIterator
 from skipgram import SkipGramModel
 
 if __name__ == '__main__':
+    print("Hello World")
     model_name = "test"
     model_root = "./models"
-    filename = "./data/lst/lst_test.preprocessed"
-    model, loss, params = SkipGramModel.load(model_root, model_name)
-    vocab = model.vocab
+    test_file = "./data/lst/lst_test.preprocessed"
+    gold_file = "./data/lst/lst.gold.candidates"
+    print("Loading: ", model_name)
+    sgm_model, loss, params = SkipGramModel.load(model_root, model_name)
+    print("Loaded. Creating embeddings")
+    sgm_ematrix, sgm_words = sgm_model.get_embeddings()
 
-    words = list(vocab.index.items())
-    words.sort(key= lambda _: _[1])
+    similarity = WordSimilarityModel(sgm_words, sgm_ematrix)
 
-    words = [ w for (w, i) in words ]
-    # print(words)
-    wsm = WordSimilarityModel(words, model.input_embeddings.detach().numpy().T)
-    lst = LstIterator(filename)
+    gold = LstIterator(gold_file, category="subs")
+
+    gold_dict = {i.target_word: i.substitutes for i in gold}
+    # sgm_dict = {sgm_words[i]: sgm_ematrix[i] for i in range(len(sgm_words))}
+
+    temp={}
+
+    for target_gold, gold_subs in gold_dict.items():
+        for target_test in sgm_words:
+            if target_test == target_gold:
+                temp[target_test] = gold_subs
+
+    print("Computing similarities")
+    lst = LstIterator(test_file, category = "test")
     skipped_count = 0
     existing_words = {}
-    for l in lst:
-        if l.target_word not in wsm.word_index or l.target_word in existing_words.keys():
+
+    for i, l in enumerate(lst):
+    #     print("Word: ", i)
+        if l.target_word not in temp.keys() or l.sentence_id in existing_words.keys():
             skipped_count += 1
+            existing_words[l.complete_word, l.sentence_id] = []
             continue
-        existing_words[l.target_word] = (wsm.most_similar(l.target_word, score=True, n=3))
+        temp_list = []
+        for each_subs in temp[l.target_word]:
+            if each_subs not in similarity.word_index:
+                continue
+            #temp_cosine = cosine_similarity(w2v.wv[l.target_word], w2v.wv[each_subs])
+            temp_cosine = cosine_similarity(similarity[l.target_word], similarity[each_subs])
+            temp_list.append((each_subs, temp_cosine))
+        existing_words[l.complete_word, l.sentence_id] = temp_list
         # print("Words skipped {}".format(skipped_count))
     print("Number of unique words in the file: ", len(existing_words))
 
-    for k, v in existing_words.items():
-        # with open('output', 'w') as f:
-        #     f.append(k + "\t" + "\n")
-        print(k, v)
+    with open('skipgram_lst.out', 'w+') as f:
+        for k, v in existing_words.items():
+            f.write('RANKED\t' + ' '.join(k))
+            for word, score in v:
+                f.write('\t' + word + ' ' + str(round(score, 4)) + '\t')
+            f.write('\n')
+            # f.write(k + v +  '\n')
