@@ -2,3 +2,5 @@ SentEval
 dgm4nlp
 *.pkl
 models
+*.swp
+senteval_example.ipynb
