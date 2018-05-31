@@ -1,4 +1,4 @@
-# README - ULL: Practical 1
+# README - ULL: Practical 3
 By, Samarth Bhargav and Tharangni Harsha Sivaji
 
 Requires the setup of the requirements present in requirements.txt file present in the root of the repository, which can be done by executing the following command (assumes Python3.5x and pip is installed):
@@ -20,8 +20,7 @@ The Skipgram model needs to be trained on the English-Europarl data:
 - Change the variable `EUROPARL_DATA` to point to Europarl `training.en`
 - If required, change the parameters in the `get_skipgram` function. It already has reasonable defaults corresponding to the values mentioned in the report.
 ```
-SKIPGRAM=<location of the model>
-python skipgram.py $SKIPGRAM
+python skipgram.py <location of the model>
 ```
 
 ### 1.2 Embed Align model
@@ -36,7 +35,7 @@ To evaluate both models on the SentEval tasks:
 - If required, change the following variables in the `evaluate_models.py` script:
 - `PATH_TO_SENTEVAL`. Default is `./SentEval`
 - Edit the `run_all.sh` script variables to point to the right location
-- Run `run_all.sh`
+- Run : `./run_all.sh`
 - The `.pkl` files containing the results are saved in `./results_min`, `./results_max`, `./results_avg` and `./results_concat`
 
 ## 2.2 Visualization and viewing the performance
